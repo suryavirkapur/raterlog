@@ -12,7 +12,7 @@ import { Card, CardTitle, CardHeader, CardContent } from "@/components/ui/card";
 
 export default async function Page() {
   return (
-    <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50">
+    <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50 dark:bg-gray-950">
       <Card className="w-[400px]">
         <CardHeader>
           <CardTitle>Create an account</CardTitle>

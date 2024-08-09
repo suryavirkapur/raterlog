@@ -11,15 +11,9 @@ export default async function RootLayout({
   if (!user) {
     return redirect("/signin");
   }
-  const obj = await db.user.findUnique({
-    where: { id: user.id },
-  });
   return (
     <html lang="en">
-      <body>
-        <>{obj?.name}</>
-        {children}
-      </body>
+      <body className="dark  dark:bg-gray-950">{children}</body>
     </html>
   );
 }

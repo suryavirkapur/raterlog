@@ -14,11 +14,12 @@ datasource db {
 }
 
 model User {
-  id       String    @id
-  name     String
-  email    String    @unique
-  password String
-  sessions Session[]
+  id          String        @id
+  name        String
+  email       String        @unique
+  password    String
+  sessions    Session[]
+  CompanyUser CompanyUser[]
 }
 
 model Session {
@@ -26,6 +27,52 @@ model Session {
   userId    String
   expiresAt DateTime
   user      User     @relation(references: [id], fields: [userId], onDelete: Cascade)
+}
+
+model Company {
+  id          String        @id
+  name        String
+  billing     Boolean
+  CompanyUser CompanyUser[]
+  Token       Token[]
+  Channel     Channel[]
+}
+
+model Channel {
+  id        String  @unique
+  name      String
+  companyID String
+  company   Company @relation(fields: [companyID], references: [id])
+  Log       Log[]
+
+  @@id([id, companyID])
+}
+
+model Log {
+  channelID    String
+  channel      Channel @relation(fields: [channelID], references: [id])
+  timestamp    String
+  eventName    String
+  eventPayload String
+
+  @@id([channelID, timestamp])
+}
+
+model CompanyUser {
+  companyID String
+  userID    String
+  user      User    @relation(fields: [userID], references: [id])
+  company   Company @relation(fields: [companyID], references: [id])
+
+  @@id([companyID, userID])
+}
+
+model Token {
+  id        Int     @id @default(autoincrement())
+  name      String
+  token     String
+  companyID String
+  company   Company @relation(fields: [companyID], references: [id])
 }
 
 model Car {

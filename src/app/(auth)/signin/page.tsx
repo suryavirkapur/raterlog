@@ -12,10 +12,10 @@ import { Card, CardTitle, CardHeader, CardContent } from "@/components/ui/card";
 // app/login/page.tsx
 export default async function Page() {
   return (
-    <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50">
+    <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50  dark:bg-gray-950">
       <Card className="w-[400px]">
         <CardHeader>
-          <CardTitle>Make an account</CardTitle>
+          <CardTitle>Login to account</CardTitle>
         </CardHeader>
         <CardContent>
           <Form action={login}>
@@ -36,7 +36,11 @@ async function login(_: any, formData: FormData): Promise<ActionResult> {
   "use server";
 
   const password = formData.get("password");
-  if (typeof password !== "string" || password.length < 6 || password.length > 255) {
+  if (
+    typeof password !== "string" ||
+    password.length < 6 ||
+    password.length > 255
+  ) {
     return {
       error: "Invalid password",
     };
@@ -45,7 +49,9 @@ async function login(_: any, formData: FormData): Promise<ActionResult> {
   const email = formData.get("email");
   if (
     typeof email !== "string" ||
-    !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/.test(email)
+    !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/.test(
+      email
+    )
   ) {
     return {
       error: "Invalid email",
@@ -63,7 +69,10 @@ async function login(_: any, formData: FormData): Promise<ActionResult> {
     };
   }
 
-  const validPassword = await new Argon2id().verify(existingUser.password, password);
+  const validPassword = await new Argon2id().verify(
+    existingUser.password,
+    password
+  );
   if (!validPassword) {
     return {
       error: "Incorrect username or password",
@@ -72,7 +81,11 @@ async function login(_: any, formData: FormData): Promise<ActionResult> {
 
   const session = await lucia.createSession(existingUser.id, {});
   const sessionCookie = lucia.createSessionCookie(session.id);
-  cookies().set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes);
+  cookies().set(
+    sessionCookie.name,
+    sessionCookie.value,
+    sessionCookie.attributes
+  );
   return redirect("/dash");
 }
 
