@@ -21,8 +21,6 @@ import { Input } from "@/components/ui/input";
 
 export default async function Page() {
   const { user } = await validateRequest();
-  const x = await db.car.count();
-  console.log(x);
   const companies = await db.companyUser.findMany({
     where: { userID: user?.id },
   });
@@ -35,6 +33,7 @@ export default async function Page() {
           <h1>Hi, {user.name}!</h1>
         </CardHeader>
         <CardContent>
+          {JSON.stringify(companies)}
           {companies.map(async (company) => {
             const res = await db.company.findFirst({
               where: { id: company.companyID },
@@ -90,7 +89,6 @@ async function logout(): Promise<ActionResult> {
 async function makeCompany(formData: FormData): Promise<ActionResult> {
   "use server";
   const name = formData.get("name");
-
   if (typeof name !== "string" || name.trim() === "")
     return { error: "Company name is missing." };
   const { user } = await validateRequest();
@@ -103,6 +101,14 @@ async function makeCompany(formData: FormData): Promise<ActionResult> {
       billing: false,
     },
   });
-  revalidatePath("/dash");
+  await db.companyUser.create({
+    data: {
+      userID: user.id,
+      companyID: company.id,
+    },
+  });
+
+  console.log(company.name);
+  revalidatePath(`/dash`);
   return { error: "" };
 }

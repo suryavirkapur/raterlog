@@ -41,6 +41,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       revalidatePath(`/dash/${res.id}`);
       return { error: "" };
     };
+    
     return (
       <>
         <div className="flex max-w-screen-sm mx-auto">

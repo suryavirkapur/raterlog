@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgres"
   url      = env("DATABASE_URL")
 }
 
@@ -73,12 +73,4 @@ model Token {
   token     String
   companyID String
   company   Company @relation(fields: [companyID], references: [id])
-}
-
-model Car {
-  id        Int     @id @default(autoincrement())
-  model     String
-  make      String
-  price     Int
-  published Boolean @default(true)
 }

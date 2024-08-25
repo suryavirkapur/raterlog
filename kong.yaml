@@ -1,0 +1,42 @@
+_format_version: "2.1"
+_transform: true
+
+services:
+  - name: nextjs-app
+    url: http://nextjs-app:3000
+    routes:
+      - name: nextjs-route
+        paths:
+          - /
+        strip_path: false
+
+  - name: rust-api
+    url: http://rust-api:8000
+    routes:
+      - name: api-route
+        paths:
+          - /api
+        strip_path: true
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Authorization
+        - Content-Type
+      credentials: true
+      max_age: 3600
+
+  - name: rate-limiting
+    config:
+      minute: 100
+      policy: local
