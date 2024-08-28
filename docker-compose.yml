@@ -13,35 +13,33 @@ services:
     volumes:
       - cassandra-data:/var/lib/cassandra
 
-  kong-migration:
-    image: kong:latest
-    command: kong migrations bootstrap
-    environment:
-      KONG_DATABASE: off
 
-  kong:
-    image: kong:latest
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
-    ports:
-      - "8000:8000"
-      - "8443:8443"
-      - "8001:8001"
-      - "8444:8444"
-    volumes:
-      - ./kong.yml:/usr/local/kong/declarative/kong.yml
+  # kong:
+  #   image: kong:latest
+  #   environment:
+  #     KONG_DATABASE: "off"
+  #     KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+  #   ports:
+  #     - "8000:8000"
+  #     - "8443:8443"
+  #     - "8001:8001"
+  #     - "8444:8444"
+  #   volumes:
+  #     - ./kong.yml:/usr/local/kong/declarative/kong.yml
 
-  nextjs-app:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    environment:
-      NODE_ENV: production
-    ports:
-      - "3000:3000"
+  # nextjs-app:
+  #   build:
+  #     context: ./web
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     NODE_ENV: production
+  #   ports:
+  #     - "3000:3000"
 
   rust-api:
+    restart: unless-stopped
+    depends_on:
+      - cassandra
     build:
       context: ./api
       dockerfile: Dockerfile
@@ -52,6 +50,5 @@ services:
 
 volumes:
   kong_data:
-
   cassandra-data:
 

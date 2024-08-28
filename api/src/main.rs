@@ -1,6 +1,7 @@
 use actix_web::{web::Data, App, HttpServer};
-
 use scylla::{Session, SessionBuilder};
+use std::time::Duration;
+use tokio::time::sleep;
 use tokio_postgres::NoTls;
 
 use crate::routes::log::{hello, log_input};
@@ -12,6 +13,35 @@ struct AppState {
     db: Session,
 }
 
+async fn connect_with_retry(
+    uri: &str,
+    max_retries: u32,
+    initial_delay: Duration,
+) -> Result<Session, Box<dyn std::error::Error>> {
+    let mut retries = 0;
+    let mut delay = initial_delay;
+
+    loop {
+        match SessionBuilder::new().known_node(uri).build().await {
+            Ok(session) => return Ok(session),
+            Err(e) => {
+                if retries >= max_retries {
+                    return Err(
+                        format!("Failed to connect after {} retries: {}", max_retries, e).into(),
+                    );
+                }
+                println!(
+                    "Connection attempt failed: {}. Retrying in {:?}...",
+                    e, delay
+                );
+                sleep(delay).await;
+                retries += 1;
+                delay *= 2; // Exponential backoff
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     // let (client, _) = tokio_postgres::connect("postgres://avnadmin:AVNS_g9jhX8Ctx_x0P6vDC4K@pg-1d2d2fd1-suryavirkapur-e42a.k.aivencloud.com:18186/defaultdb?sslmode=require", NoTls).await.unwrap();
@@ -20,13 +50,16 @@ async fn main() -> std::io::Result<()> {
     //     println!("{:?}", row);
     // }
     //print!(" XX {}", x);
-    let uri = "cassandra-container:9042";
 
-    let session = SessionBuilder::new()
-        .known_node(uri)
-        .build()
+    let uri = "cassandra:9042";
+    let max_retries = 5;
+    let initial_delay = Duration::from_secs(10);
+
+    let session = connect_with_retry(uri, max_retries, initial_delay)
         .await
-        .expect("msg");
+        .unwrap();
+
+    println!("Successfully connected to Cassandra!");
 
     db::start_db(&session).await;
 
