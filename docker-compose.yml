@@ -36,17 +36,17 @@ services:
   #   ports:
   #     - "3000:3000"
 
-  rust-api:
-    restart: unless-stopped
-    depends_on:
-      - cassandra
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    environment:
-      RUST_LOG: info
-    ports:
-      - "8080:8080"
+  # rust-api:
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - cassandra
+  #   build:
+  #     context: ./api
+  #     dockerfile: Dockerfile
+  #   environment:
+  #     RUST_LOG: info
+  #   ports:
+  #     - "8080:8080"
 
 volumes:
   kong_data:

@@ -2,13 +2,13 @@ _format_version: "2.1"
 _transform: true
 
 services:
-  - name: nextjs-app
-    url: http://nextjs-app:3000
-    routes:
-      - name: nextjs-route
-        paths:
-          - /
-        strip_path: false
+  # - name: nextjs-app
+  #   url: http://nextjs-app:3000
+  #   routes:
+  #     - name: nextjs-route
+  #       paths:
+  #         - /
+  #       strip_path: false
 
   - name: rust-api
     url: http://rust-api:8000
