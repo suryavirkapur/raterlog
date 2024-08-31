@@ -13,24 +13,32 @@ struct LogReadout {
 }
 
 #[post("/log")]
-pub async fn log_input(data: web::Json<LogReadout>) -> String {
+pub async fn log_input(data: web::Json<LogReadout>, dbs: web::Data<AppState>) -> String {
     print!("Got Req");
     eprintln!("Received: {:?}", data.channel_id);
     eprintln!("Received: {:?}", data.message);
     "OK\n".to_owned()
 }
 
+#[get("/log")]
+pub async fn logs_display(dbs: web::Data<AppState>) -> String {
+    let strsm = dbs
+        .client
+        .query_one("SELECT * FROM \"Token\"", &[])
+        .await
+        .unwrap()
+        .get::<_, String>(1);
+    strsm
+}
+
 #[get("/")]
 pub async fn hello(data: web::Data<AppState>) -> String {
-    let result = data
-        .db
-        .query("SELECT channel_id, message FROM raterlog.logs", &[])
+    let db_name = data
+        .client
+        .query_one("SELECT current_database()", &[])
         .await
-        .unwrap();
+        .unwrap()
+        .get::<_, String>(0);
 
-    let mut iter = result.rows_typed::<LogReadout>().expect("X");
-    while let Some(row_data) = iter.next().transpose().expect("Y") {
-        println!("row_data: {:?}", row_data);
-    }
-    "Hello Actix".to_owned()
+    db_name
 }

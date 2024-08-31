@@ -11,7 +11,7 @@ services:
   #       strip_path: false
 
   - name: rust-api
-    url: http://rust-api:8000
+    url: http://rust-api:8080
     routes:
       - name: api-route
         paths:

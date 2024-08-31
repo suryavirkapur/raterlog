@@ -1,16 +1,7 @@
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { validateRequest } from "@/lib/auth";
 import db from "@/lib/db";
 import { ActionResult } from "@/lib/form";
+import { Box, Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { generateId } from "lucia";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
@@ -41,15 +32,15 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       revalidatePath(`/dash/${res.id}`);
       return { error: "" };
     };
-    
+
     return (
       <>
         <div className="flex max-w-screen-sm mx-auto">
-          <Card className="w-full">
-            <CardHeader>
-              <CardTitle>Add Channel</CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Flex className="w-full">
+            <Box>
+              <Heading>Add Channel</Heading>
+            </Box>
+            <Box>
               {channels.map((channel) => (
                 <>
                   <Link href={`/dash/${res.id}/${channel.id}`} key={channel.id}>
@@ -62,23 +53,24 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
               {JSON.stringify(res)}
               <br />
               <form action={createChannel}>
-                <Label htmlFor="name">Channel Name</Label>
-                <Input name="name" type="string" id="name" />
+                <label htmlFor="name">Channel Name</label>
+                <input name="name" type="string" id="name" />
                 <Button type="submit">Add Channel</Button>
               </form>
-            </CardContent>
-            <CardFooter>
+            </Box>
+            <Box>
               <Link href={`/dash/${params.slug}/tokens`}>
-                {res.name}'s Access Tokens
+                {res.name}&apos;s Access Tokens
               </Link>
-            </CardFooter>
-          </Card>
+            </Box>
+          </Flex>
         </div>
       </>
     );
   }
 
   if (params.slug.length === 2 && params.slug[1] === "tokens") {
+    // Tokens Page
     const deleteToken = async (id: number): Promise<ActionResult> => {
       "use server";
       console.log("X");
@@ -93,9 +85,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
 
     const createToken = async (formData: FormData): Promise<ActionResult> => {
       "use server";
-      console.log("yoobie");
       const name = formData.get("name");
-      console.log(name);
       if (typeof name !== "string") return { error: "X" };
       const { user } = await validateRequest();
       if (!user) return { error: "No User" };
@@ -117,22 +107,17 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
         {tokens.map((yo) => {
           const deleteWithBind = deleteToken.bind(null, yo.id);
           return (
-            <div
-              className="flex flex-row items-center justify-between bg-gray-300 rounded-md max-w-screen-sm mx-auto"
-              key={yo.id}
-            >
-              <p>{yo.name + "=" + yo.token}</p>
+            <Flex key={yo.id} style={{ backgroundColor: "gray" }}>
+              <Text>{yo.name + "=" + yo.token}</Text>
               <form action={deleteWithBind}>
-                <Button type="submit" variant="destructive">
-                  X
-                </Button>
+                <Button type="submit">X</Button>
               </form>
-            </div>
+            </Flex>
           );
         })}
         <form action={createToken}>
-          <Label htmlFor="name">Name</Label>
-          <Input name="name" type="string" id="name" />
+          <label htmlFor="name">Name</label>
+          <input name="name" type="string" id="name" />
           <Button type="submit"> Create Token</Button>
         </form>
       </>
@@ -147,19 +132,19 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     const logs = channel.Log;
     return (
       <div className="max-h-screen max-w-screen-sm mx-auto">
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle>{channel.name}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Flex className="w-full">
+          <Box>
+            <Heading>{channel.name}</Heading>
+          </Box>
+          <Box>
             {logs.map((x) => (
               <div key={x.timestamp}>
                 {x.eventName}
                 <br />
               </div>
             ))}
-          </CardContent>
-        </Card>
+          </Box>
+        </Flex>
       </div>
     );
   }

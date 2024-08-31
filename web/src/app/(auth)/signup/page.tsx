@@ -5,31 +5,30 @@ import { lucia } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { generateId } from "lucia";
 import { Form } from "@/lib/form";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardTitle, CardHeader, CardContent } from "@/components/ui/card";
+import { Flex, Box, Button, Heading } from "@radix-ui/themes";
 
 export default async function Page() {
   return (
     <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50 dark:bg-gray-950">
-      <Card className="w-[400px]">
-        <CardHeader>
-          <CardTitle>Create an account</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <Flex className="w-[400px]">
+        <Box>
+          <Heading>Create an account</Heading>
+        </Box>
+        <Flex>
           <form action={signup}>
-            <Label htmlFor="name">Name</Label>
-            <Input name="name" id="name" />
-            <Label htmlFor="email">Email</Label>
-            <Input type="email" name="email" id="email" />
-            <Label htmlFor="password">Password</Label>
-            <Input type="password" name="password" id="password" />
+            <label htmlFor="name">Name</label>
+            <input name="name" id="name" />
+            <br />
+            <label htmlFor="email">Email</label>
+            <input type="email" name="email" id="email" />
+            <br />
+            <label htmlFor="password">Password</label>
+            <input type="password" name="password" id="password" />
             <br />
             <Button>Register</Button>
           </form>
-        </CardContent>
-      </Card>
+        </Flex>
+      </Flex>
     </div>
   );
 }

@@ -6,18 +6,7 @@ import { ActionResult, Form } from "@/lib/form";
 import Link from "next/link";
 import { generateId } from "lucia";
 import { revalidatePath } from "next/cache";
-
-import { Button } from "@/components/ui/button";
-
-import {
-  Card,
-  CardTitle,
-  CardHeader,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { Box, Button, Flex, Heading } from "@radix-ui/themes";
 
 export default async function Page() {
   const { user } = await validateRequest();
@@ -26,14 +15,13 @@ export default async function Page() {
   });
   if (!user) return;
   return (
-    <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50  dark:bg-gray-950">
-      <Card className="w-[400px]">
-        <CardHeader>
-          <CardTitle>Choose an Organization</CardTitle>
+    <div className="">
+      <Flex className="">
+        <Box>
+          <Heading>Choose an Organization</Heading>
           <h1>Hi, {user.name}!</h1>
-        </CardHeader>
-        <CardContent>
-          {JSON.stringify(companies)}
+        </Box>
+        <Box>
           {companies.map(async (company) => {
             const res = await db.company.findFirst({
               where: { id: company.companyID },
@@ -50,18 +38,18 @@ export default async function Page() {
               </>
             );
           })}
-        </CardContent>
-        <CardFooter>
+        </Box>
+        <Box>
           <form action={makeCompany}>
-            <Label htmlFor="name">Name</Label>
-            <Input name="name" id="name" />
+            <label htmlFor="name">Name</label>
+            <input name="name" id="name" />
             <Button type="submit">Add Company</Button>
           </form>
           <Form action={logout}>
             <Button>Logout</Button>
           </Form>
-        </CardFooter>
-      </Card>
+        </Box>
+      </Flex>
     </div>
   );
 }
