@@ -4,8 +4,6 @@ use scylla::Session;
 use std::time::Duration;
 use tokio_postgres::{Client, NoTls};
 
-use crate::routes::log::{hello, log_input, logs_display};
-
 mod db;
 mod routes;
 
@@ -56,9 +54,9 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
-            .service(hello)
-            .service(log_input)
-            .service(logs_display)
+            .service(routes::log::hello)
+            .service(routes::log::create_log)
+            .service(routes::log::get_logs)
     })
     .bind("0.0.0.0:8081")?
     .run()

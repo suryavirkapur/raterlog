@@ -16,40 +16,30 @@ export default async function Page() {
   if (!user) return;
   return (
     <div className="">
-      <Flex className="">
+      <Box>
         <Box>
-          <Heading>Choose an Organization</Heading>
           <h1>Hi, {user.name}!</h1>
         </Box>
-        <Box>
-          {companies.map(async (company) => {
-            const res = await db.company.findFirst({
-              where: { id: company.companyID },
-            });
-            return (
-              <>
-                <Link
-                  key={company.companyID}
-                  href={`/dash/${company.companyID}`}
-                >
-                  {res?.name}
-                </Link>
-                <br />
-              </>
-            );
-          })}
-        </Box>
-        <Box>
+        <br />
+
+        <Flex
+          style={{
+            margin: 2,
+            padding: 4,
+            borderRadius: "5px",
+            backgroundColor: "gray",
+          }}
+          direction="column"
+        >
           <form action={makeCompany}>
             <label htmlFor="name">Name</label>
+            <br />
             <input name="name" id="name" />
+            <br />
             <Button type="submit">Add Company</Button>
           </form>
-          <Form action={logout}>
-            <Button>Logout</Button>
-          </Form>
-        </Box>
-      </Flex>
+        </Flex>
+      </Box>
     </div>
   );
 }

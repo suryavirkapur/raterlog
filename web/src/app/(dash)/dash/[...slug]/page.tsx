@@ -36,11 +36,11 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     return (
       <>
         <div className="flex max-w-screen-sm mx-auto">
-          <Flex className="w-full">
+          <Flex direction="column">
             <Box>
-              <Heading>Add Channel</Heading>
+              <Heading>Channels</Heading>
             </Box>
-            <Box>
+            <Flex direction="column">
               {channels.map((channel) => (
                 <>
                   <Link href={`/dash/${res.id}/${channel.id}`} key={channel.id}>
@@ -50,19 +50,26 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                 </>
               ))}
               <br />
-              {JSON.stringify(res)}
+              <Link href={`/dash/${params.slug}/tokens`}>
+                {res.name}&apos;s Access Tokens
+              </Link>
               <br />
-              <form action={createChannel}>
+              <form
+                action={createChannel}
+                style={{
+                  margin: 4,
+                  backgroundColor: "gray",
+                  borderRadius: "5px",
+                  alignContent: "center",
+                  justifyItems: "center",
+                }}
+              >
                 <label htmlFor="name">Channel Name</label>
                 <input name="name" type="string" id="name" />
                 <Button type="submit">Add Channel</Button>
               </form>
-            </Box>
-            <Box>
-              <Link href={`/dash/${params.slug}/tokens`}>
-                {res.name}&apos;s Access Tokens
-              </Link>
-            </Box>
+            </Flex>
+            <Box></Box>
           </Flex>
         </div>
       </>
@@ -102,25 +109,48 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
 
     const tokens = res.Token;
     return (
-      <>
+      <Flex direction="column">
         You have {tokens.length} tokens!
         {tokens.map((yo) => {
           const deleteWithBind = deleteToken.bind(null, yo.id);
           return (
-            <Flex key={yo.id} style={{ backgroundColor: "gray" }}>
-              <Text>{yo.name + "=" + yo.token}</Text>
+            <Flex
+              key={yo.id}
+              style={{
+                backgroundColor: "gray",
+                padding: 4,
+                borderRadius: "5px",
+                margin: 2,
+              }}
+              direction="row"
+              justify="between"
+            >
+              <Text style={{ width: "300px" }}>{yo.name}</Text>
+              <Text style={{ width: "300px" }}>{yo.token}</Text>
               <form action={deleteWithBind}>
                 <Button type="submit">X</Button>
               </form>
             </Flex>
           );
         })}
-        <form action={createToken}>
-          <label htmlFor="name">Name</label>
-          <input name="name" type="string" id="name" />
-          <Button type="submit"> Create Token</Button>
-        </form>
-      </>
+        <Flex
+          style={{
+            padding: 4,
+            backgroundColor: "gray",
+            borderRadius: "5px",
+            margin: 2,
+          }}
+          direction="column"
+        >
+          <form action={createToken}>
+            <label htmlFor="name">Name</label>
+            <br />
+            <input name="name" type="string" id="name" />
+            <br />
+            <Button type="submit"> Create Token</Button>
+          </form>
+        </Flex>
+      </Flex>
     );
   }
   if (params.slug.length === 2) {
