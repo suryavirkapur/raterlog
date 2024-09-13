@@ -14,14 +14,16 @@ struct AppState {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let uri = "localhost:9042";
+    let uri = "host.docker.internal:9042";
     let max_retries = 5;
     let initial_delay = Duration::from_secs(10);
 
-    let (client, connection) =
-        tokio_postgres::connect("postgres://postgres:postgres@localhost:5432/example", NoTls)
-            .await
-            .unwrap();
+    let (client, connection) = tokio_postgres::connect(
+        "postgres://postgres:postgres@host.docker.internal:5432/example",
+        NoTls,
+    )
+    .await
+    .unwrap();
 
     // Spawn the connection handler
     tokio::spawn(async move {
@@ -58,7 +60,7 @@ async fn main() -> std::io::Result<()> {
             .service(routes::log::create_log)
             .service(routes::log::get_logs)
     })
-    .bind("0.0.0.0:8081")?
+    .bind("0.0.0.0:8080")?
     .run()
     .await
 }

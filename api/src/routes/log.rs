@@ -19,11 +19,15 @@ struct CreateLogInput {
     event_payload: String,
 }
 
-async fn verify_token(client: &tokio_postgres::Client, token: &str) -> bool {
+async fn verify_token(client: &tokio_postgres::Client, token: &str, channel_id: &str) -> bool {
     let result = client
         .query_one(
-            "SELECT EXISTS(SELECT 1 FROM \"Token\" WHERE token = $1)",
-            &[&token],
+            "SELECT EXISTS(
+                SELECT 1 FROM \"Token\" t
+                JOIN \"Channel\" c ON t.\"companyID\" = c.\"companyID\"
+                WHERE t.token = $1 AND c.id = $2
+            )",
+            &[&token, &channel_id],
         )
         .await;
 
@@ -45,7 +49,7 @@ async fn create_log(
     };
 
     let token = basic_auth.trim_start_matches("Basic ");
-    if !verify_token(&state.client, token).await {
+    if !verify_token(&state.client, token, &data.channel_id).await {
         return HttpResponse::Unauthorized().finish();
     }
 
@@ -77,13 +81,12 @@ async fn get_logs(
         Some(header) => header.to_str().unwrap_or(""),
         None => return HttpResponse::Unauthorized().finish(),
     };
-
+    let channel_id = path.into_inner();
     let token = basic_auth.trim_start_matches("Basic ");
-    if !verify_token(&state.client, token).await {
+    if !verify_token(&state.client, token, &channel_id).await {
         return HttpResponse::Unauthorized().finish();
     }
 
-    let channel_id = path.into_inner();
     let result = state.db.query(
         "SELECT channel_id, timestamp, event_name, event_payload FROM raterlog.logs WHERE channel_id = ?",
         (channel_id,)

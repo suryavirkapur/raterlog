@@ -41,6 +41,7 @@ model Company {
 model Channel {
   id        String  @unique
   name      String
+  icon      String
   companyID String
   company   Company @relation(fields: [companyID], references: [id])
   Log       Log[]

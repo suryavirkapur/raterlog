@@ -1,13 +1,17 @@
 import db from "@/lib/db";
 import { Argon2id } from "oslo/password";
 import { cookies } from "next/headers";
-import { lucia } from "@/lib/auth";
+import { lucia, validateRequest } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { generateId } from "lucia";
 import { Form } from "@/lib/form";
 import { Flex, Box, Button, Heading } from "@radix-ui/themes";
 
 export default async function Page() {
+  const { user } = await validateRequest();
+  if (user) {
+    return redirect("/dash");
+  }
   return (
     <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50 dark:bg-gray-950">
       <Flex className="w-[400px]">

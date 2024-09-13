@@ -20,12 +20,16 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
     const createChannel = async (formData: FormData): Promise<ActionResult> => {
       "use server";
       const name = formData.get("name");
+      const emoji = formData.get("emoji");
       if (typeof name !== "string" || name.trim() == "")
         return { error: "Name is empty" };
+      if (typeof emoji !== "string" || emoji.trim() == "")
+        return { error: "Emoji is empty" };
       await db.channel.create({
         data: {
           companyID: res.id,
           name: name,
+          icon: emoji,
           id: generateId(15),
         },
       });
@@ -44,6 +48,7 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
               {channels.map((channel) => (
                 <>
                   <Link href={`/dash/${res.id}/${channel.id}`} key={channel.id}>
+                    {channel.icon}
                     {channel.name}
                   </Link>
                   <br />
@@ -62,10 +67,15 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
                   borderRadius: "5px",
                   alignContent: "center",
                   justifyItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
                 <label htmlFor="name">Channel Name</label>
                 <input name="name" type="string" id="name" />
+                <br />
+                <label htmlFor="emoji">Channel Icon</label>
+                <input name="emoji" type="string" id="emoji" placeholder="😁" />
+                <br />
                 <Button type="submit">Add Channel</Button>
               </form>
             </Flex>
@@ -164,7 +174,10 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
       <div className="max-h-screen max-w-screen-sm mx-auto">
         <Flex className="w-full">
           <Box>
-            <Heading>{channel.name}</Heading>
+            <Heading>
+              {channel.icon}
+              {channel.name}
+            </Heading>
           </Box>
           <Box>
             {logs.map((x) => (
