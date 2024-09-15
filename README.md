@@ -88,7 +88,7 @@ The frontend is a Next.js application using React and Radix UI for the interface
 
 ## Database Schema
 
-The project uses both ScyllaDB (for logs) and PostgreSQL (for user and company data). The PostgreSQL schema can be found in:
+The project uses both ScyllaDB (for logs) and PostgreSQL (for user and company data). The PostgreSQL schema can be found in Prisma schema file in the web folder.
 
 ## Contributing
 
