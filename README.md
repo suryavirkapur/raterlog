@@ -2,6 +2,14 @@
 
 Raterlog is a real-time monitoring solution for modern product teams. It allows you to track events, monitor potential issues, and make data-driven decisions based on live logs and analytics.
 
+## Demo 
+
+
+
+https://github.com/user-attachments/assets/ad45761d-50c6-4296-bf7d-764c7b45bfe6
+
+
+
 ## Project Structure
 
 The project consists of two main parts:
