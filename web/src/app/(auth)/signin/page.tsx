@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { lucia, validateRequest } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import db from "@/lib/db";
-import { Box, Button, Flex, Heading } from "@radix-ui/themes";
+import { Box, Button, Flex, Heading, Text } from "@radix-ui/themes";
 
 // app/login/page.tsx
 export default async function Page() {
@@ -13,28 +13,56 @@ export default async function Page() {
     return redirect("/dash");
   }
   return (
-    <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50  dark:bg-gray-950">
-      <Flex className="w-[400px]">
-        <Box>
-          <Heading>Login to account</Heading>
-        </Box>
-        <Box>
-          <Form action={login}>
-            <label htmlFor="email">Email</label>
-            <input type="email" name="email" id="email" />
-            <br />
-            <label htmlFor="password">Password</label>
-            <input type="password" name="password" id="password" />
-            <br />
-            <br />
-            <Button>Login</Button>
-          </Form>
-        </Box>
-      </Flex>
-    </div>
+    <Flex direction="column" gap="4">
+      <Box>
+        <Heading size="2" weight="bold">
+          Login to account
+        </Heading>
+      </Box>
+      <Box>
+        <Form action={login}>
+          <Flex direction="column" gap="3">
+            <label>
+              <Text as="div" size="2" mb="1" weight="bold">
+                Email
+              </Text>
+              <input
+                type="email"
+                name="email"
+                required
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--gray-6)",
+                }}
+              />
+            </label>
+            <label>
+              <Text as="div" size="2" mb="1" weight="bold">
+                Password
+              </Text>
+              <input
+                type="password"
+                name="password"
+                required
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--gray-6)",
+                }}
+              />
+            </label>
+            <Button type="submit" size="3">
+              Login
+            </Button>
+          </Flex>
+        </Form>
+      </Box>
+    </Flex>
   );
 }
-
 async function login(_: any, formData: FormData): Promise<ActionResult> {
   "use server";
 

@@ -6,6 +6,7 @@ import { generateId } from "lucia";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import React from "react";
+import LiveLogs from "@/components/LiveLogs";
 
 export default async function Page({ params }: { params: { slug: string[] } }) {
   const res = await db.company.findFirst({
@@ -166,28 +167,30 @@ export default async function Page({ params }: { params: { slug: string[] } }) {
   if (params.slug.length === 2) {
     const channel = await db.channel.findFirst({
       where: { id: params.slug[1] },
-      include: { Log: true },
+      include: { company: true },
+    });
+    const token = await db.token.findFirst({
+      where: { companyID: channel?.companyID },
     });
     if (!channel) return;
-    const logs = channel.Log;
     return (
       <div className="max-h-screen max-w-screen-sm mx-auto">
-        <Flex className="w-full">
+        <Box className="w-full">
+          <Heading>
+            {channel.icon}
+            {channel.name}
+          </Heading>
+          <Text size="1" style={{ color: "grey" }}>
+            Channel ID: {channel.id}
+          </Text>
           <Box>
-            <Heading>
-              {channel.icon}
-              {channel.name}
-            </Heading>
+            <LiveLogs
+              channelID={channel.id}
+              token={token?.token || ""}
+              icon={channel.icon}
+            />
           </Box>
-          <Box>
-            {logs.map((x) => (
-              <div key={x.timestamp}>
-                {x.eventName}
-                <br />
-              </div>
-            ))}
-          </Box>
-        </Flex>
+        </Box>
       </div>
     );
   }

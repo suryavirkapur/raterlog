@@ -1,29 +1,28 @@
+use actix_cors::Cors;
 use actix_web::{web::Data, App, HttpServer};
 use db::connect_with_retry;
 use scylla::Session;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use tokio_postgres::{Client, NoTls};
 
 mod db;
 mod routes;
 
 struct AppState {
-    db: Session,
+    db: Arc<Session>,
     client: Client,
 }
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let uri = "host.docker.internal:9042";
+    let uri = "localhost:9042";
     let max_retries = 5;
     let initial_delay = Duration::from_secs(10);
 
-    let (client, connection) = tokio_postgres::connect(
-        "postgres://postgres:postgres@host.docker.internal:5432/example",
-        NoTls,
-    )
-    .await
-    .unwrap();
+    let (client, connection) =
+        tokio_postgres::connect("postgres://postgres:postgres@localhost:5432/example", NoTls)
+            .await
+            .unwrap();
 
     // Spawn the connection handler
     tokio::spawn(async move {
@@ -49,12 +48,19 @@ async fn main() -> std::io::Result<()> {
     println!("Successfully connected to Cassandra!");
 
     let data = Data::new(AppState {
-        db: session,
+        db: Arc::new(session),
         client,
     });
 
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .app_data(data.clone())
             .service(routes::log::hello)
             .service(routes::log::create_log)

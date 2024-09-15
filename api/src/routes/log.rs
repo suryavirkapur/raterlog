@@ -118,3 +118,67 @@ pub async fn hello(data: web::Data<AppState>) -> String {
 
     db_name
 }
+
+// #[get("/live-logs/{channel_id}")]
+// async fn live_logs(
+//     request: HttpRequest,
+//     path: web::Path<String>,
+//     state: web::Data<AppState>,
+// ) -> impl Responder {
+//     let channel_id = path.into_inner();
+//     let basic_auth = match request.headers().get("Authorization") {
+//         Some(header) => header.to_str().unwrap_or(""),
+//         None => return HttpResponse::Unauthorized().finish(),
+//     };
+//     let token = basic_auth.trim_start_matches("Basic ");
+//     if !verify_token(&state.client, token, &channel_id).await {
+//         return HttpResponse::Unauthorized().finish();
+//     }
+
+//     let db = Arc::clone(&state.db);
+
+//     let stream = tokio_stream::wrappers::IntervalStream::new(interval(Duration::from_secs(5)))
+//         .then(move |_| {
+//             let db = Arc::clone(&db);
+//             let channel_id = channel_id.clone();
+//             async move {
+//                 let result =   db.query(
+//                     "SELECT channel_id, timestamp, event_name, event_payload FROM raterlog.logs WHERE channel_id = ? ORDER BY timestamp DESC LIMIT 1",
+//                     (channel_id,)
+//                 ).await;
+//                 match result{
+//                     Ok(res) => {
+//                         let rows: Vec<Log> = res
+//                 .rows_typed::<Log>()
+//                 .unwrap()
+//                 .into_iter()
+//                 .map(|row| row.unwrap())
+//                 .collect();
+
+//                         match res.into_typed_rows::<Log>() {
+//                             Some(mut rows) => {
+//                                 if let Some(log) = rows.next() {
+//                                     match log {
+//                                         Ok(log) => {
+//                                             let data = serde_json::to_string(&log).unwrap();
+//                                             Ok(Bytes::from(format!("data: {}\n\n", data)))
+//                                         },
+//                                         Err(e) => Err(Error::from(e))
+//                                     }
+//                                 } else {
+//                                     Ok(Bytes::from(":\n\n")) // Keep-alive when no rows
+//                                 }
+//                             },
+//                             None => Ok(Bytes::from(":\n\n")) // Keep-alive when no typed rows
+//                         }
+//                     },
+//                     Err(e) => Err(Error::from(e)) // Convert database error to actix_web::Error
+//                 }
+//             }
+//         });
+
+//     HttpResponse::Ok()
+//         .insert_header(("Content-Type", "text/event-stream"))
+//         .insert_header(("Cache-Control", "no-cache"))
+//         .streaming(stream)
+// }

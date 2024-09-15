@@ -24,14 +24,14 @@ services:
       - "8001:8001"
       - "8444:8444"
 
-  # nextjs-app:
-  #   build:
-  #     context: ./web
-  #     dockerfile: Dockerfile
-  #   environment:
-  #     NODE_ENV: production
-  #   ports:
-  #     - "3000:3000"
+  nextjs-app:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
 
   rust-api:
     restart: unless-stopped
