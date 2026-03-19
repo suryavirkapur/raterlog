@@ -36,6 +36,7 @@ model Company {
   CompanyUser CompanyUser[]
   Token       Token[]
   Channel     Channel[]
+  Invite      Invite[]
 }
 
 model Channel {
@@ -74,4 +75,17 @@ model Token {
   token     String
   companyID String
   company   Company @relation(fields: [companyID], references: [id])
+}
+
+model Invite {
+  id        String   @id
+  email     String
+  companyID String
+  company   Company  @relation(fields: [companyID], references: [id])
+  token     String   @unique
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([email, companyID])
 }

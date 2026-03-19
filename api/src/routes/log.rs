@@ -10,6 +10,7 @@ struct Log {
     timestamp: String,
     event_name: String,
     event_payload: String,
+    metadata: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -17,6 +18,7 @@ struct CreateLogInput {
     channel_id: String,
     event_name: String,
     event_payload: String,
+    metadata: Option<serde_json::Value>,
 }
 
 async fn verify_token(client: &tokio_postgres::Client, token: &str, channel_id: &str) -> bool {
@@ -53,16 +55,19 @@ async fn create_log(
         return HttpResponse::Unauthorized().finish();
     }
 
+    let metadata_str = data.metadata.as_ref().map(|m| m.to_string());
+
     let log = Log {
         channel_id: data.channel_id.clone(),
         timestamp: Utc::now().to_string(),
         event_name: data.event_name.clone(),
         event_payload: data.event_payload.clone(),
+        metadata: metadata_str.clone(),
     };
 
     let result = state.db.query(
-        "INSERT INTO raterlog.logs (channel_id, timestamp, event_name, event_payload) VALUES (?, ?, ?, ?)",
-        (&log.channel_id, &log.timestamp, &log.event_name, &log.event_payload)
+        "INSERT INTO raterlog.logs (channel_id, timestamp, event_name, event_payload, metadata) VALUES (?, ?, ?, ?, ?)",
+        (&log.channel_id, &log.timestamp, &log.event_name, &log.event_payload, &metadata_str)
     ).await;
 
     match result {
@@ -88,7 +93,7 @@ async fn get_logs(
     }
 
     let result = state.db.query(
-        "SELECT channel_id, timestamp, event_name, event_payload FROM raterlog.logs WHERE channel_id = ? LIMIT 200",
+        "SELECT channel_id, timestamp, event_name, event_payload, metadata FROM raterlog.logs WHERE channel_id = ? LIMIT 200",
         (channel_id,)
     ).await;
 
