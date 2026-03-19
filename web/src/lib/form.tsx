@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormState } from "react-dom";
+import { Callout, Text } from "@radix-ui/themes";
 
 export function Form({
   children,
@@ -14,8 +15,12 @@ export function Form({
   });
   return (
     <form action={formAction}>
+      {state.error && (
+        <Callout.Root color="red" size="1" mb="3">
+          <Callout.Text>{state.error}</Callout.Text>
+        </Callout.Root>
+      )}
       {children}
-      <p>{state.error}</p>
     </form>
   );
 }

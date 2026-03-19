@@ -1,67 +1,105 @@
 import db from "@/lib/db";
-import { lucia, validateRequest } from "@/lib/auth";
+import { validateRequest } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { ActionResult, Form } from "@/lib/form";
-import Link from "next/link";
 import { generateId } from "lucia";
 import { revalidatePath } from "next/cache";
-import { Box, Button, Flex, Heading } from "@radix-ui/themes";
+import {
+  Box,
+  Button,
+  Flex,
+  Heading,
+  Text,
+  Card,
+  TextField,
+  Grid,
+  Badge,
+} from "@radix-ui/themes";
+import Link from "next/link";
 
 export default async function Page() {
   const { user } = await validateRequest();
-  const companies = await db.companyUser.findMany({
-    where: { userID: user?.id },
+  if (!user) return redirect("/signin");
+
+  const companyUsers = await db.companyUser.findMany({
+    where: { userID: user.id },
+    include: { company: true },
   });
-  if (!user) return;
+
   return (
-    <div className="">
+    <Flex direction="column" gap="6">
       <Box>
-        <Box>
-          <h1>Hi, {user.name}!</h1>
-        </Box>
-        <br />
-
-        <Flex
-          style={{
-            margin: 2,
-            padding: 4,
-            borderRadius: "5px",
-            backgroundColor: "gray",
-          }}
-          direction="column"
-        >
-          <form action={makeCompany}>
-            <label htmlFor="name">Name</label>
-            <br />
-            <input name="name" id="name" />
-            <br />
-            <Button type="submit">Add Company</Button>
-          </form>
-        </Flex>
+        <Heading size="6" mb="1">Welcome back, {user.name}</Heading>
+        <Text size="3" color="gray">
+          Manage your companies and monitoring channels
+        </Text>
       </Box>
-    </div>
+
+      {/* Create Company */}
+      <Card size="2">
+        <Flex direction="column" gap="3">
+          <Heading size="4">Create a Company</Heading>
+          <Form action={makeCompany}>
+            <Flex direction="row" gap="3" align="end">
+              <label style={{ flex: 1 }}>
+                <Text as="div" size="2" mb="1" weight="medium">
+                  Company Name
+                </Text>
+                <TextField.Root
+                  name="name"
+                  placeholder="Acme Corp"
+                  size="3"
+                />
+              </label>
+              <Button type="submit" size="3">
+                Create
+              </Button>
+            </Flex>
+          </Form>
+        </Flex>
+      </Card>
+
+      {/* Company List */}
+      {companyUsers.length > 0 && (
+        <Box>
+          <Heading size="4" mb="3">Your Companies</Heading>
+          <Grid columns={{ initial: "1", md: "2" }} gap="3">
+            {companyUsers.map((cu) => (
+              <Link
+                href={`/dash/${cu.companyID}`}
+                key={cu.companyID}
+                style={{ textDecoration: "none" }}
+              >
+                <Card
+                  size="2"
+                  style={{
+                    cursor: "pointer",
+                    transition: "background-color 0.15s",
+                  }}
+                >
+                  <Flex align="center" justify="between">
+                    <Flex direction="column" gap="1">
+                      <Text weight="bold" size="3">
+                        {cu.company.name}
+                      </Text>
+                      <Text size="2" color="gray">
+                        {cu.company.billing ? (
+                          <Badge color="green" variant="soft">Active billing</Badge>
+                        ) : (
+                          <Badge color="gray" variant="soft">Free tier</Badge>
+                        )}
+                      </Text>
+                    </Flex>
+                    <Text size="2" color="gray">&rarr;</Text>
+                  </Flex>
+                </Card>
+              </Link>
+            ))}
+          </Grid>
+        </Box>
+      )}
+    </Flex>
   );
-}
-
-async function logout(): Promise<ActionResult> {
-  "use server";
-  const { session } = await validateRequest();
-  if (!session) {
-    return {
-      error: "Unauthorized",
-    };
-  }
-
-  await lucia.invalidateSession(session.id);
-
-  const sessionCookie = lucia.createBlankSessionCookie();
-  cookies().set(
-    sessionCookie.name,
-    sessionCookie.value,
-    sessionCookie.attributes
-  );
-  return redirect("/signin");
 }
 
 async function makeCompany(formData: FormData): Promise<ActionResult> {
@@ -70,9 +108,9 @@ async function makeCompany(formData: FormData): Promise<ActionResult> {
   if (typeof name !== "string" || name.trim() === "")
     return { error: "Company name is missing." };
   const { user } = await validateRequest();
-  if (!user) return { error: "Company name is missing." };
+  if (!user) return { error: "Unauthorized" };
   const companyID = generateId(15);
-  const company = await db.company.create({
+  await db.company.create({
     data: {
       name: name,
       id: companyID,
@@ -82,11 +120,10 @@ async function makeCompany(formData: FormData): Promise<ActionResult> {
   await db.companyUser.create({
     data: {
       userID: user.id,
-      companyID: company.id,
+      companyID: companyID,
     },
   });
 
-  console.log(company.name);
   revalidatePath(`/dash`);
   return { error: "" };
 }

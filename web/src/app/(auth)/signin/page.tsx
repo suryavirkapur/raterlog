@@ -4,63 +4,58 @@ import { cookies } from "next/headers";
 import { lucia, validateRequest } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import db from "@/lib/db";
-import { Box, Button, Flex, Heading, Text } from "@radix-ui/themes";
+import { Box, Button, Flex, Heading, Text, Card, TextField } from "@radix-ui/themes";
+import Link from "next/link";
 
-// app/login/page.tsx
 export default async function Page() {
   const { user } = await validateRequest();
   if (user) {
     return redirect("/dash");
   }
   return (
-    <Flex direction="column" gap="4">
-      <Box>
-        <Heading size="2" weight="bold">
-          Login to account
-        </Heading>
-      </Box>
-      <Box>
+    <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
+      <Flex direction="column" gap="5">
+        <Box>
+          <Heading size="6" mb="1">Welcome back</Heading>
+          <Text size="2" color="gray">Sign in to your account</Text>
+        </Box>
         <Form action={login}>
-          <Flex direction="column" gap="3">
+          <Flex direction="column" gap="4">
             <label>
-              <Text as="div" size="2" mb="1" weight="bold">
+              <Text as="div" size="2" mb="1" weight="medium">
                 Email
               </Text>
-              <input
+              <TextField.Root
                 type="email"
                 name="email"
-                required
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--gray-6)",
-                }}
+                placeholder="you@example.com"
+                size="3"
               />
             </label>
             <label>
-              <Text as="div" size="2" mb="1" weight="bold">
+              <Text as="div" size="2" mb="1" weight="medium">
                 Password
               </Text>
-              <input
+              <TextField.Root
                 type="password"
                 name="password"
-                required
-                style={{
-                  width: "100%",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--gray-6)",
-                }}
+                placeholder="Your password"
+                size="3"
               />
             </label>
-            <Button type="submit" size="3">
-              Login
+            <Button type="submit" size="3" mt="1">
+              Sign in
             </Button>
           </Flex>
         </Form>
-      </Box>
-    </Flex>
+        <Text size="2" align="center" color="gray">
+          Don&apos;t have an account?{" "}
+          <Link href="/signup" style={{ color: "var(--accent-9)" }}>
+            Sign up
+          </Link>
+        </Text>
+      </Flex>
+    </Card>
   );
 }
 async function login(_: any, formData: FormData): Promise<ActionResult> {

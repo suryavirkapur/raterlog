@@ -7,7 +7,11 @@ import {
   Flex,
   Heading,
   Link,
+  Text,
   Theme,
+  Box,
+  Separator,
+  IconButton,
 } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
 import { cookies } from "next/headers";
@@ -24,10 +28,13 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const { user } = await validateRequest();
-  const companies = await db.companyUser.findMany({
-    where: { userID: user?.id },
+  if (!user) return redirect("/signin");
+
+  const companyUsers = await db.companyUser.findMany({
+    where: { userID: user.id },
+    include: { company: true },
   });
-  if (!user) return;
+
   return (
     <html lang="en">
       <body>
@@ -38,46 +45,88 @@ export default async function RootLayout({
           scaling="95%"
           appearance="dark"
         >
-          <Container p="2">
-            <Flex justify="between">
-              <Heading>Raterlog</Heading>
-              <Form action={logout}>
-                <Button type="submit">Logout</Button>
-              </Form>
-            </Flex>
-            <Flex direction="row">
-              <Flex width={"25%"} direction="column">
-                <Heading size="4">Settings</Heading>
-                <Heading size="3">
-                  <Link underline="none" href="/dash">
-                    Home
+          <Flex style={{ minHeight: "100vh" }}>
+            {/* Sidebar */}
+            <Box
+              style={{
+                width: "260px",
+                borderRight: "1px solid var(--gray-a5)",
+                padding: "20px",
+                flexShrink: 0,
+              }}
+            >
+              <Flex direction="column" gap="5" style={{ height: "100%" }}>
+                <Flex align="center" justify="between">
+                  <Heading size="5">Raterlog</Heading>
+                </Flex>
+
+                <Separator size="4" />
+
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="bold" color="gray" mb="2" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Overview
+                  </Text>
+                  <Link
+                    underline="none"
+                    href="/dash"
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "var(--radius-3)",
+                      color: "var(--gray-12)",
+                    }}
+                  >
+                    <Text size="2">Home</Text>
                   </Link>
-                </Heading>
-                <br />
-                <Heading size="4">Companies</Heading>
-                {companies.map(async (company) => {
-                  const res = await db.company.findFirst({
-                    where: { id: company.companyID },
-                  });
-                  return (
-                    <>
-                      <Heading size="3" key={company.companyID}>
-                        <Link
-                          underline="none"
-                          href={`/dash/${company.companyID}`}
-                        >
-                          {res?.name}
-                        </Link>
-                      </Heading>
-                    </>
-                  );
-                })}
+                </Flex>
+
+                <Separator size="4" />
+
+                <Flex direction="column" gap="1">
+                  <Text size="1" weight="bold" color="gray" mb="2" style={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Companies
+                  </Text>
+                  {companyUsers.map((cu) => (
+                    <Link
+                      underline="none"
+                      href={`/dash/${cu.companyID}`}
+                      key={cu.companyID}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: "var(--radius-3)",
+                        color: "var(--gray-12)",
+                      }}
+                    >
+                      <Text size="2">{cu.company.name}</Text>
+                    </Link>
+                  ))}
+                  {companyUsers.length === 0 && (
+                    <Text size="2" color="gray" style={{ padding: "8px 12px" }}>
+                      No companies yet
+                    </Text>
+                  )}
+                </Flex>
+
+                <Box style={{ marginTop: "auto" }}>
+                  <Separator size="4" mb="3" />
+                  <Flex align="center" justify="between">
+                    <Text size="2" color="gray">
+                      {user.name}
+                    </Text>
+                    <Form action={logout}>
+                      <Button type="submit" variant="soft" size="1">
+                        Logout
+                      </Button>
+                    </Form>
+                  </Flex>
+                </Box>
               </Flex>
-              <Flex>
-                <main>{children}</main>
-              </Flex>
-            </Flex>
-          </Container>
+            </Box>
+
+            {/* Main Content */}
+            <Box style={{ flex: 1, padding: "32px 40px", overflowY: "auto" }}>
+              <Container size="3">{children}</Container>
+            </Box>
+          </Flex>
         </Theme>
       </body>
     </html>

@@ -5,7 +5,8 @@ import { lucia, validateRequest } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { generateId } from "lucia";
 import { Form } from "@/lib/form";
-import { Flex, Box, Button, Heading } from "@radix-ui/themes";
+import { Flex, Box, Button, Heading, Text, Card, TextField } from "@radix-ui/themes";
+import Link from "next/link";
 
 export default async function Page() {
   const { user } = await validateRequest();
@@ -13,35 +14,65 @@ export default async function Page() {
     return redirect("/dash");
   }
   return (
-    <div className="flex flex-row min-h-screen justify-center items-center bg-gray-50 dark:bg-gray-950">
-      <Flex className="w-[400px]">
+    <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
+      <Flex direction="column" gap="5">
         <Box>
-          <Heading>Create an account</Heading>
+          <Heading size="6" mb="1">Create an account</Heading>
+          <Text size="2" color="gray">Enter your details to get started</Text>
         </Box>
-        <Flex>
-          <form action={signup}>
-            <label htmlFor="name">Name</label>
-            <input name="name" id="name" />
-            <br />
-            <label htmlFor="email">Email</label>
-            <input type="email" name="email" id="email" />
-            <br />
-            <label htmlFor="password">Password</label>
-            <input type="password" name="password" id="password" />
-            <br />
-            <Button>Register</Button>
-          </form>
-        </Flex>
+        <Form action={signup}>
+          <Flex direction="column" gap="4">
+            <label>
+              <Text as="div" size="2" mb="1" weight="medium">
+                Name
+              </Text>
+              <TextField.Root
+                name="name"
+                placeholder="Your name"
+                size="3"
+              />
+            </label>
+            <label>
+              <Text as="div" size="2" mb="1" weight="medium">
+                Email
+              </Text>
+              <TextField.Root
+                type="email"
+                name="email"
+                placeholder="you@example.com"
+                size="3"
+              />
+            </label>
+            <label>
+              <Text as="div" size="2" mb="1" weight="medium">
+                Password
+              </Text>
+              <TextField.Root
+                type="password"
+                name="password"
+                placeholder="Min 6 characters"
+                size="3"
+              />
+            </label>
+            <Button type="submit" size="3" mt="1">
+              Create account
+            </Button>
+          </Flex>
+        </Form>
+        <Text size="2" align="center" color="gray">
+          Already have an account?{" "}
+          <Link href="/signin" style={{ color: "var(--accent-9)" }}>
+            Sign in
+          </Link>
+        </Text>
       </Flex>
-    </div>
+    </Card>
   );
 }
 
 async function signup(formData: FormData): Promise<ActionResult> {
   "use server";
   const name = formData.get("name");
-  // username must be between 4 ~ 31 characters, and only consists of lowercase letters, 0-9, -, and _
-  // keep in mind some database (e.g. mysql) are case insensitive
   if (typeof name !== "string" || name.length < 3 || name.length > 31) {
     return {
       error: "Invalid name",
@@ -83,7 +114,6 @@ async function signup(formData: FormData): Promise<ActionResult> {
   const hashedPassword = await new Argon2id().hash(password);
   const userId = generateId(15);
 
-  // TODO: check if username is already used
   await db.user.create({
     data: {
       id: userId,

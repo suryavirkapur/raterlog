@@ -88,7 +88,7 @@ async fn get_logs(
     }
 
     let result = state.db.query(
-        "SELECT channel_id, timestamp, event_name, event_payload FROM raterlog.logs WHERE channel_id = ?",
+        "SELECT channel_id, timestamp, event_name, event_payload FROM raterlog.logs WHERE channel_id = ? LIMIT 200",
         (channel_id,)
     ).await;
 
