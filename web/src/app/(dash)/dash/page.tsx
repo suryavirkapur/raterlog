@@ -102,7 +102,7 @@ export default async function Page() {
   );
 }
 
-async function makeCompany(formData: FormData): Promise<ActionResult> {
+async function makeCompany(_: any, formData: FormData): Promise<ActionResult> {
   "use server";
   const name = formData.get("name");
   if (typeof name !== "string" || name.trim() === "")

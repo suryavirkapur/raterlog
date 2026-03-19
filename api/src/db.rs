@@ -51,10 +51,16 @@ pub async fn start_db(session: &Session) {
                 timestamp text,
                 event_name text,
                 event_payload text,
+                metadata text,
                 PRIMARY KEY ((channel_id), timestamp)
             ) WITH CLUSTERING ORDER BY (timestamp DESC);",
             &[],
         )
         .await
         .unwrap();
+
+    // Add metadata column to existing tables (ignore if already exists)
+    let _ = session
+        .query("ALTER TABLE raterlog.logs ADD metadata text", &[])
+        .await;
 }

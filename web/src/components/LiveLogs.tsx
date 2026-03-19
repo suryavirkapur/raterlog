@@ -1,5 +1,5 @@
 "use client";
-import { Box, Card, Flex, Heading, Text, Badge, ScrollArea } from "@radix-ui/themes";
+import { Box, Card, Flex, Heading, Text, Badge, ScrollArea, Table, Separator } from "@radix-ui/themes";
 import React, { useEffect, useState } from "react";
 import {
   LineChart,
@@ -19,6 +19,7 @@ interface LogItem {
   event_payload: string;
   event_name: string;
   timestamp: string;
+  metadata: string | null;
 }
 
 interface LiveLogsProps {
@@ -28,6 +29,99 @@ interface LiveLogsProps {
 }
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+
+function LogCard({ log, icon, idx }: { log: LogItem; icon: string; idx: number }) {
+  const [open, setOpen] = useState(false);
+
+  let parsedMeta: [string, string][] = [];
+  if (log.metadata) {
+    try {
+      const obj = JSON.parse(log.metadata);
+      parsedMeta = Object.entries(obj).map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]);
+    } catch {
+      parsedMeta = [["raw", log.metadata]];
+    }
+  }
+
+  const hasMeta = parsedMeta.length > 0;
+
+  return (
+    <Card
+      key={`${log.timestamp}-${idx}`}
+      size="2"
+      style={{
+        background: "var(--gray-a2)",
+        cursor: hasMeta ? "pointer" : "default",
+        transition: "background 0.15s",
+      }}
+      onClick={() => hasMeta && setOpen(!open)}
+    >
+      <Flex direction="column" gap="2">
+        <Flex align="center" justify="between">
+          <Flex align="center" gap="3">
+            <Text size="4">{icon}</Text>
+            <Flex direction="column" gap="1">
+              <Flex align="center" gap="2">
+                <Text weight="bold" size="2">{log.event_name}</Text>
+                {hasMeta && (
+                  <Badge
+                    size="1"
+                    variant="soft"
+                    color={open ? "blue" : "gray"}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {parsedMeta.length} {parsedMeta.length === 1 ? "field" : "fields"} {open ? "\u25B2" : "\u25BC"}
+                  </Badge>
+                )}
+              </Flex>
+              <Text size="1" color="gray">{log.event_payload}</Text>
+            </Flex>
+          </Flex>
+          <Text size="1" color="gray" style={{ whiteSpace: "nowrap" }}>
+            {formatTimestamp(log.timestamp)}
+          </Text>
+        </Flex>
+
+        {open && hasMeta && (
+          <>
+            <Separator size="4" />
+            <Box>
+              <Table.Root size="1" variant="surface">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell style={{ width: "35%" }}>Key</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Value</Table.ColumnHeaderCell>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {parsedMeta.map(([key, value]) => (
+                    <Table.Row key={key}>
+                      <Table.Cell>
+                        <Text size="1" weight="bold" color="blue">{key}</Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="1" style={{ fontFamily: "var(--code-font-family)" }}>{value}</Text>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            </Box>
+          </>
+        )}
+      </Flex>
+    </Card>
+  );
+}
+
+const formatTimestamp = (ts: string) => {
+  try {
+    const d = new Date(ts);
+    return d.toLocaleString();
+  } catch {
+    return ts;
+  }
+};
 
 const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, token, icon }) => {
   const [logs, setLogs] = useState<LogItem[]>([]);
@@ -87,15 +181,6 @@ const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, token, icon }) => {
     const intervalId = setInterval(fetchLogs, 5000);
     return () => clearInterval(intervalId);
   }, [channelID, token]);
-
-  const formatTimestamp = (ts: string) => {
-    try {
-      const d = new Date(ts);
-      return d.toLocaleString();
-    } catch {
-      return ts;
-    }
-  };
 
   return (
     <Flex direction="column" gap="4">
@@ -210,7 +295,7 @@ const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, token, icon }) => {
             <Heading size="3">Recent Events</Heading>
             <Badge variant="soft" color="blue">{logs.length} events</Badge>
           </Flex>
-          <ScrollArea style={{ maxHeight: "400px" }}>
+          <ScrollArea style={{ maxHeight: "500px" }}>
             <Flex direction="column" gap="2">
               {logs.length === 0 ? (
                 <Text color="gray" size="2" style={{ padding: "20px 0", textAlign: "center" }}>
@@ -218,24 +303,7 @@ const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, token, icon }) => {
                 </Text>
               ) : (
                 logs.map((log, idx) => (
-                  <Card
-                    key={`${log.timestamp}-${idx}`}
-                    size="1"
-                    style={{ background: "var(--gray-a2)" }}
-                  >
-                    <Flex align="start" justify="between" gap="3">
-                      <Flex align="center" gap="2">
-                        <Text size="3">{icon}</Text>
-                        <Flex direction="column" gap="1">
-                          <Text weight="bold" size="2">{log.event_name}</Text>
-                          <Text size="1" color="gray">{log.event_payload}</Text>
-                        </Flex>
-                      </Flex>
-                      <Text size="1" color="gray" style={{ whiteSpace: "nowrap" }}>
-                        {formatTimestamp(log.timestamp)}
-                      </Text>
-                    </Flex>
-                  </Card>
+                  <LogCard key={`${log.timestamp}-${idx}`} log={log} icon={icon} idx={idx} />
                 ))
               )}
             </Flex>
