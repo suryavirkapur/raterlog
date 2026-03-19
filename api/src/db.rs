@@ -44,16 +44,9 @@ pub async fn start_db(session: &Session) {
         .await
         .unwrap();
 
-    // Drop the existing table
-    let _ = session
-        .query("DROP TABLE IF EXISTS raterlog.logs", &[])
-        .await
-        .unwrap();
-
-    // Recreate the table
     let _ = session
         .query(
-            "CREATE TABLE raterlog.logs (
+            "CREATE TABLE IF NOT EXISTS raterlog.logs (
                 channel_id text,
                 timestamp text,
                 event_name text,

@@ -3,6 +3,8 @@ export const metadata = {
   description: "",
 };
 import "@radix-ui/themes/styles.css";
+import { Theme, Container } from "@radix-ui/themes";
+
 export default function RootLayout({
   children,
 }: {
@@ -10,7 +12,19 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Theme
+          accentColor="blue"
+          grayColor="sand"
+          radius="large"
+          scaling="95%"
+          appearance="dark"
+        >
+          <Container size="1" p="4" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {children}
+          </Container>
+        </Theme>
+      </body>
     </html>
   );
 }

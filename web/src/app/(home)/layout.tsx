@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Raterlog",
-  description: "Raterlog",
+  description: "Raterlog - Realtime monitoring for your entire business",
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
           appearance="dark"
         >
           <Nav />
-          <Container p="2">{children}</Container>
+          <Container size="3" px="4" py="2">{children}</Container>
         </Theme>
       </body>
     </html>
