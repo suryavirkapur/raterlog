@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/.next
+**/dist
+api/target
+**/.DS_Store
+recordings
+*.log
+web/.env*.local

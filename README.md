@@ -1,99 +1,54 @@
 # Raterlog
 
-Raterlog is a real-time monitoring solution for modern product teams. It allows you to track events, monitor potential issues, and make data-driven decisions based on live logs and analytics.
+Raterlog is a LogSnag-style event monitoring platform: ingest product events, identify users, publish live insights, and ask an AI copilot what just happened.
 
-## Go Rewrite
+The Go rewrite lives at [suryavirkapur/raterlog-go](https://github.com/suryavirkapur/raterlog-go). This repository is the original Rust + Next.js stack, now with **all HTTP APIs owned by the Rust backend**.
 
-The Go-based rewrite lives at [suryavirkapur/raterlog-go](https://github.com/suryavirkapur/raterlog-go). This repository is the original Rust API and Next.js implementation.
+## Architecture
 
-## Demo 
+- **Rust API (`api/`)** — authentication, sessions, companies, members, invites, channels, API tokens, LogSnag-compatible ingest (`/v1/log`, `/v1/identify`, `/v1/insight`), Cassandra event storage, and AI summarize/query.
+- **Next.js UI (`web/`)** — dashboard and marketing site. It talks to the API over JSON; it does not own Prisma mutations or Next.js route handlers for product data.
+- **Postgres** — users, sessions, companies, membership, channels, tokens, invites, insights, identified users. The API applies this schema on boot.
+- **Cassandra/Scylla** — append-only event logs.
+- **Kong** — optional gateway in front of the API.
 
+## API surface
 
+Session cookie `raterlog_session` (or `X-Session-Token`) for the dashboard. Ingest uses `Authorization: Bearer <token>` or `Basic <token>`.
 
-https://github.com/user-attachments/assets/ad45761d-50c6-4296-bf7d-764c7b45bfe6
+Auth: `POST /api/auth/signup`, `POST /api/auth/signin`, `POST /api/auth/signout`, `GET /api/auth/me`
 
+Companies: `GET|POST /api/companies`, `GET|PATCH /api/companies/{id}`, channels, members, invites, tokens
 
+Invites: `GET /api/invites/{token}`, `POST /api/invites/{token}/accept`
 
-## Project Structure
+Logs: `POST /api/logs`, `GET /api/logs/{channelId}` (aliases `POST /log`, `GET /log/{channelId}`)
 
-The project consists of two main parts:
+LogSnag-compatible: `POST /v1/log`, `POST /v1/identify`, `POST|PATCH /v1/insight`
 
-1. A Rust backend API
-2. A Next.js frontend application
+AI: `POST /api/channels/{channelId}/ai/summarize`, `POST /api/channels/{channelId}/ai/query`
 
-### Backend (Rust)
+## Run locally
 
-The backend is built with Actix-web and uses Scylla (Cassandra) for storing logs and PostgreSQL for user and company data.
+Postgres on `5432`, Cassandra on `9042`, Mailhog on `1025`.
 
-### Frontend (Next.js)
+```sh
+cd api
+# optional: DATABASE_URL, CASSANDRA_URI, CORS_ORIGINS, APP_URL, SMTP_HOST, SMTP_PORT, OPENAI_API_KEY
+cargo run
+```
 
-The frontend is a Next.js application using React and Radix UI for the interface.
+```sh
+cd web
+echo 'NEXT_PUBLIC_API_URL=http://localhost:8080' > .env
+bun install   # or npm install
+bun run dev
+```
 
-## Getting Started
+The API creates Postgres tables on startup. Open `http://localhost:3000`.
 
-### Prerequisites
+Docker Compose starts Cassandra, Postgres, Mailhog, Kong, the API, and the web UI. Set `NEXT_PUBLIC_API_URL` at image build time to the browser-reachable API (default `http://localhost:8080`).
 
-- Rust
-- Node.js
-- PostgreSQL
-- Cassandra (or ScyllaDB)
+## AI
 
-### Backend Setup
-
-1. Navigate to the `api` directory
-2. Install dependencies:
-
-   ```sh
-   cargo build
-   ```
-
-3. Set up your environment variables (database connections, etc.)
-4. Run the migrations:
-
-   ```sh
-   cargo run --bin migrate
-   ```
-
-5. Start the server:
-
-   ```sh
-   cargo run
-   ```
-
-### Frontend Setup
-
-1. Navigate to the `web` directory
-2. Install dependencies:
-
-   ```sh
-   bun install
-   ```
-
-3. Set up your environment variables
-4. Run the database migrations:
-
-   ```sh
-   bun run db
-   ```
-
-5. Start the development server:
-
-   ```sh
-   bun run dev
-   ```
-
-## Features
-
-- Real-time log monitoring
-- User authentication and authorization
-- Company and channel management
-- Token-based API access
-- Live charts and analytics
-
-## Database Schema
-
-The project uses both ScyllaDB (for logs) and PostgreSQL (for user and company data). The PostgreSQL schema can be found in Prisma schema file in the web folder.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+Summaries and Q&A always work with local heuristics. Set `OPENAI_API_KEY` on the API to upgrade those answers with `gpt-4o-mini`.
