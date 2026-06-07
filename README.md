@@ -2,6 +2,10 @@
 
 Raterlog is a real-time monitoring solution for modern product teams. It allows you to track events, monitor potential issues, and make data-driven decisions based on live logs and analytics.
 
+## Go Rewrite
+
+The Go-based rewrite lives at [suryavirkapur/raterlog-go](https://github.com/suryavirkapur/raterlog-go). This repository is the original Rust API and Next.js implementation.
+
 ## Demo 
 
 
