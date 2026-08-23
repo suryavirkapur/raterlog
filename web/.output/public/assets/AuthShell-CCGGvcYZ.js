@@ -1,1 +1,0 @@
-import{S as e}from"./radius.prop-Dy2dHUsF.js";import{t}from"./container-X-aMheYj.js";var n=e();function r({children:e}){return(0,n.jsx)(t,{size:`1`,p:`4`,style:{minHeight:`100vh`,display:`flex`,alignItems:`center`,justifyContent:`center`},children:e})}export{r as t};

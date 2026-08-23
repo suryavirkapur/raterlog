@@ -1,1 +1,0 @@
-import{et as e,rt as t}from"./radius.prop-Dy2dHUsF.js";var n=t(e());function r(e,t){let{asChild:r,children:i}=e;if(!r)return typeof t==`function`?t(i):t;let a=n.Children.only(i);return n.cloneElement(a,{children:typeof t==`function`?t(a.props.children):t})}export{r as t};
