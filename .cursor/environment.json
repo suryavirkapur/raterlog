@@ -1,0 +1,23 @@
+{
+  "name": "Raterlog",
+  "user": "ubuntu",
+  "install": "bash .cursor/install.sh",
+  "start": "bash .cursor/start.sh",
+  "terminals": [
+    {
+      "name": "rust-api",
+      "command": "export PATH=\"/usr/local/cargo/bin:$PATH\"; cd api && cargo run",
+      "description": "Actix-web log ingestion API on :8080 (PostgreSQL + Cassandra)."
+    },
+    {
+      "name": "web",
+      "command": "export PATH=\"$HOME/.bun/bin:$PATH\"; cd web && bun run dev",
+      "description": "Next.js dashboard dev server on :3000."
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 3000 },
+    { "name": "api", "port": 8080 },
+    { "name": "mailhog", "port": 8025 }
+  ]
+}
