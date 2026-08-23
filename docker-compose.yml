@@ -1,71 +1,21 @@
+# Everything boots from the single top-level Dockerfile: one image runs
+# PostgreSQL, Cassandra, MailHog, the Rust API and the TanStack web app.
 services:
-
-  cassandra:
-    image: cassandra:latest
-    container_name: cassandra-container
-    ports:
-      - "9042:9042"
-    environment:
-      - CASSANDRA_USER=admin
-      - CASSANDRA_PASSWORD=admin
-    volumes:
-      - cassandra-data:/var/lib/cassandra
-
-  kong:
+  raterlog:
     build:
-      context: ./kong
+      context: .
       dockerfile: Dockerfile
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /usr/local/kong/declarative/kong.yml
+    image: raterlog
+    container_name: raterlog
     ports:
-      - "8000:8000"
-      - "8443:8443"
-      - "8001:8001"
-      - "8444:8444"
-
-  nextjs-app:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    environment:
-      NODE_ENV: production
-    ports:
-      - "3000:3000"
-
-  rust-api:
-    restart: unless-stopped
-    depends_on:
-      - cassandra
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    environment:
-      RUST_LOG: info
-    ports:
-      - "8080:8080"
-
-  mailhog:
-    image: mailhog/mailhog
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-
-  postgres:
-    image: postgres:16
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=example
+      - "3000:3000" # web dashboard
+      - "8080:8080" # Rust log-ingestion API
+      - "8025:8025" # MailHog UI
     volumes:
       - pgdata:/var/lib/postgresql/data
-    restart: always
+      - cassandra-data:/var/lib/cassandra
+    restart: unless-stopped
 
 volumes:
-  cassandra-data:
   pgdata:
-
-
-  
+  cassandra-data:

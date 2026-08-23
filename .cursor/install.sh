@@ -39,10 +39,9 @@ if [ ! -x "$HOME/.bun/bin/bun" ]; then
 fi
 export PATH="$HOME/.bun/bin:$PATH"
 
-echo "==> Installing web dependencies and generating Prisma client"
+echo "==> Installing web dependencies"
 cd "$REPO_ROOT/web"
 bun install
-bunx prisma generate
 
 echo "==> Building the Rust API"
 cd "$REPO_ROOT/api"

@@ -54,11 +54,19 @@ const adapter: Adapter = {
   },
 };
 
+// Secure cookies require HTTPS. Default to on in production, but allow an
+// explicit override (e.g. COOKIE_SECURE=false) for HTTP deployments like the
+// all-in-one container running over plain http://localhost.
+const secureCookies =
+  process.env.COOKIE_SECURE !== undefined
+    ? process.env.COOKIE_SECURE === "true"
+    : process.env.NODE_ENV === "production";
+
 export const lucia = new Lucia(adapter, {
   sessionCookie: {
     expires: false,
     attributes: {
-      secure: process.env.NODE_ENV === "production",
+      secure: secureCookies,
     },
   },
   getUserAttributes: (attributes) => ({

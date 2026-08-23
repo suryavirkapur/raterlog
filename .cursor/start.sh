@@ -38,9 +38,8 @@ if ! port_open 1025; then
 fi
 echo "    MailHog ready on :1025 (UI :8025)"
 
-echo "==> Applying Prisma schema"
-export PATH="$HOME/.bun/bin:$PATH"
+echo "==> Applying database schema"
 cd "$REPO_ROOT/web"
-bunx prisma db push --skip-generate
+node scripts/init-db.mjs
 
 echo "==> All backing services started"

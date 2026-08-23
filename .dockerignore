@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/.output
+**/.nitro
+**/dist
+api/target
+**/.DS_Store
+.cursor
+recordings
+*.log
+web/.env*.local
