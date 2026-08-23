@@ -25,16 +25,31 @@ The project consists of two main parts:
 
 The backend is built with Actix-web and uses Scylla (Cassandra) for storing logs and PostgreSQL for user and company data.
 
-### Frontend (Next.js)
+### Frontend (TanStack Start)
 
-The frontend is a Next.js application using React and Radix UI for the interface.
+The frontend is a [TanStack Start](https://tanstack.com/start) application (TanStack Router + Vite + React), using Radix UI Themes for the interface. It talks to PostgreSQL directly with [postgres.js](https://github.com/porsager/postgres) (no ORM) and uses Lucia for authentication.
 
 ## Getting Started
 
-### Prerequisites
+### Run everything with one Docker image
 
-- Rust
-- Node.js
+The entire stack (PostgreSQL, Cassandra, MailHog, the Rust API and the web app)
+boots from a single top-level `Dockerfile`:
+
+```sh
+docker compose up --build
+# or, equivalently:
+docker build -t raterlog .
+docker run -p 3000:3000 -p 8080:8080 -p 8025:8025 raterlog
+```
+
+Then open http://localhost:3000 (web), with the API on `:8080` and the MailHog
+inbox on `:8025`.
+
+### Local development prerequisites
+
+- Rust (1.85+; the API depends on crates requiring `edition2024`)
+- Node.js 22+ and [Bun](https://bun.sh)
 - PostgreSQL
 - Cassandra (or ScyllaDB)
 
@@ -70,7 +85,7 @@ The frontend is a Next.js application using React and Radix UI for the interface
    ```
 
 3. Set up your environment variables
-4. Run the database migrations:
+4. Apply the database schema (`web/schema.sql`):
 
    ```sh
    bun run db
@@ -92,7 +107,7 @@ The frontend is a Next.js application using React and Radix UI for the interface
 
 ## Database Schema
 
-The project uses both ScyllaDB (for logs) and PostgreSQL (for user and company data). The PostgreSQL schema can be found in Prisma schema file in the web folder.
+The project uses both ScyllaDB/Cassandra (for logs) and PostgreSQL (for user and company data). The PostgreSQL schema is defined in `web/schema.sql`.
 
 ## Contributing
 
