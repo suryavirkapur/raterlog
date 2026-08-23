@@ -1,8 +1,6 @@
-import { lucia, validateRequest } from "@/lib/auth";
-import db from "@/lib/db";
-import { ActionResult, Form } from "@/lib/form";
+import { api, apiOptional, type Channel, type Company, type User } from "@/lib/api";
+import { LogoutButton } from "@/components/LogoutButton";
 import {
-  Button,
   Container,
   Flex,
   Heading,
@@ -13,8 +11,10 @@ import {
   Separator,
 } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Raterlog",
@@ -26,32 +26,25 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = await validateRequest();
+  const user = await apiOptional<User>("/api/auth/me");
   if (!user) return redirect("/signin");
 
-  const companyUsers = await db.companyUser.findMany({
-    where: { userID: user.id },
-    include: { company: true },
-  });
-
-  // Detect active company from URL
+  const companies = await api<Company[]>("/api/companies");
   const pathname = headers().get("x-pathname") || headers().get("next-url") || "";
   let activeCompanyId: string | null = null;
-  for (const cu of companyUsers) {
-    if (pathname.includes(`/dash/${cu.companyID}`)) {
-      activeCompanyId = cu.companyID;
+  for (const company of companies) {
+    if (pathname.includes(`/dash/${company.id}`)) {
+      activeCompanyId = company.id;
       break;
     }
   }
 
-  // Fetch channels for active company for sidebar
-  let activeChannels: { id: string; name: string; icon: string }[] = [];
+  let activeChannels: Channel[] = [];
   if (activeCompanyId) {
-    const activeCompany = await db.company.findFirst({
-      where: { id: activeCompanyId },
-      include: { Channel: true },
-    });
-    activeChannels = activeCompany?.Channel || [];
+    const detail = await apiOptional<{ channels: Channel[] }>(
+      `/api/companies/${activeCompanyId}`
+    );
+    activeChannels = detail?.channels || [];
   }
 
   const sidebarLinkStyle = (isActive: boolean) => ({
@@ -89,7 +82,6 @@ export default async function RootLayout({
           appearance="dark"
         >
           <Flex style={{ minHeight: "100vh" }}>
-            {/* Sidebar */}
             <Box
               style={{
                 width: "240px",
@@ -100,70 +92,115 @@ export default async function RootLayout({
               }}
             >
               <Flex direction="column" gap="4" style={{ height: "100%" }}>
-                {/* Logo */}
                 <Box px="2">
-                  <Heading size="4" style={{ letterSpacing: "-0.02em" }}>Raterlog</Heading>
+                  <Heading size="4" style={{ letterSpacing: "-0.02em" }}>
+                    Raterlog
+                  </Heading>
                 </Box>
-
                 <Separator size="4" />
-
-                {/* Home */}
                 <Flex direction="column" gap="1">
-                  <Text size="1" weight="bold" color="gray" mb="1"
-                    style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "10px", padding: "0 8px" }}>
+                  <Text
+                    size="1"
+                    weight="bold"
+                    color="gray"
+                    mb="1"
+                    style={{
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      fontSize: "10px",
+                      padding: "0 8px",
+                    }}
+                  >
                     Overview
                   </Text>
-                  <Link underline="none" href="/dash"
-                    style={sidebarLinkStyle(!activeCompanyId)}>
+                  <Link
+                    underline="none"
+                    href="/dash"
+                    style={sidebarLinkStyle(!activeCompanyId)}
+                  >
                     Home
                   </Link>
                 </Flex>
-
                 <Separator size="4" />
-
-                {/* Companies */}
                 <Flex direction="column" gap="1">
-                  <Text size="1" weight="bold" color="gray" mb="1"
-                    style={{ textTransform: "uppercase", letterSpacing: "0.05em", fontSize: "10px", padding: "0 8px" }}>
+                  <Text
+                    size="1"
+                    weight="bold"
+                    color="gray"
+                    mb="1"
+                    style={{
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      fontSize: "10px",
+                      padding: "0 8px",
+                    }}
+                  >
                     Companies
                   </Text>
-                  {companyUsers.map((cu) => {
-                    const isActive = activeCompanyId === cu.companyID;
+                  {companies.map((company) => {
+                    const isActive = activeCompanyId === company.id;
                     return (
-                      <Flex direction="column" gap="0" key={cu.companyID}>
-                        <Link underline="none" href={`/dash/${cu.companyID}`}
-                          style={sidebarLinkStyle(isActive)}>
-                          {cu.company.name}
+                      <Flex direction="column" gap="0" key={company.id}>
+                        <Link
+                          underline="none"
+                          href={`/dash/${company.id}`}
+                          style={sidebarLinkStyle(isActive)}
+                        >
+                          {company.name}
                         </Link>
                         {isActive && (
                           <Flex direction="column" gap="0" mt="1">
-                            {/* Channels sub-items */}
                             {activeChannels.length > 0 && (
                               <>
-                                <Text size="1" color="gray"
-                                  style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", padding: "4px 12px" }}>
+                                <Text
+                                  size="1"
+                                  color="gray"
+                                  style={{
+                                    fontSize: "10px",
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.05em",
+                                    padding: "4px 12px",
+                                  }}
+                                >
                                   Channels
                                 </Text>
                                 {activeChannels.map((ch) => (
-                                  <Link key={ch.id} underline="none"
-                                    href={`/dash/${cu.companyID}/${ch.id}`}
-                                    style={subLinkStyle(false)}>
+                                  <Link
+                                    key={ch.id}
+                                    underline="none"
+                                    href={`/dash/${company.id}/${ch.id}`}
+                                    style={subLinkStyle(false)}
+                                  >
                                     {ch.icon} {ch.name}
                                   </Link>
                                 ))}
                               </>
                             )}
-                            {/* Tokens & Members */}
-                            <Text size="1" color="gray" mt="1"
-                              style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.05em", padding: "4px 12px" }}>
+                            <Text
+                              size="1"
+                              color="gray"
+                              mt="1"
+                              style={{
+                                fontSize: "10px",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.05em",
+                                padding: "4px 12px",
+                              }}
+                            >
                               Settings
                             </Text>
-                            <Link underline="none" href={`/dash/${cu.companyID}/tokens`}
-                              style={subLinkStyle(pathname.includes("/tokens"))}>
+                            <Link
+                              underline="none"
+                              href={`/dash/${company.id}/tokens`}
+                              style={subLinkStyle(pathname.includes("/tokens"))}
+                            >
                               Tokens
                             </Link>
-                            <Link underline="none" href={`/dash/${cu.companyID}/members`}
-                              style={subLinkStyle(pathname.includes("/members"))}>
+                            <Link
+                              underline="none"
+                              href={`/dash/${company.id}/members`}
+                              style={subLinkStyle(pathname.includes("/members"))}
+                            >
                               Members
                             </Link>
                           </Flex>
@@ -171,27 +208,23 @@ export default async function RootLayout({
                       </Flex>
                     );
                   })}
-                  {companyUsers.length === 0 && (
+                  {companies.length === 0 && (
                     <Text size="2" color="gray" style={{ padding: "8px 12px" }}>
                       No companies yet
                     </Text>
                   )}
                 </Flex>
-
-                {/* User / Logout */}
                 <Box style={{ marginTop: "auto" }}>
                   <Separator size="4" mb="3" />
                   <Flex align="center" justify="between" px="2">
-                    <Text size="2" color="gray">{user.name}</Text>
-                    <Form action={logout}>
-                      <Button type="submit" variant="soft" size="1">Logout</Button>
-                    </Form>
+                    <Text size="2" color="gray">
+                      {user.name}
+                    </Text>
+                    <LogoutButton />
                   </Flex>
                 </Box>
               </Flex>
             </Box>
-
-            {/* Main Content */}
             <Box style={{ flex: 1, padding: "28px 36px", overflowY: "auto" }}>
               <Container size="3">{children}</Container>
             </Box>
@@ -200,22 +233,4 @@ export default async function RootLayout({
       </body>
     </html>
   );
-}
-
-async function logout(_: any): Promise<ActionResult> {
-  "use server";
-  const { session } = await validateRequest();
-  if (!session) {
-    return { error: "Unauthorized" };
-  }
-
-  await lucia.invalidateSession(session.id);
-
-  const sessionCookie = lucia.createBlankSessionCookie();
-  cookies().set(
-    sessionCookie.name,
-    sessionCookie.value,
-    sessionCookie.attributes
-  );
-  return redirect("/");
 }

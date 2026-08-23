@@ -35,14 +35,14 @@ function CallToAction() {
       align="center"
       style={{ textAlign: "center" }}
     >
-      <Badge size="2" variant="soft">Real-time monitoring platform</Badge>
+      <Badge size="2" variant="soft">LogSnag-style events, now with AI</Badge>
       <Heading size="9" style={{ maxWidth: "700px", lineHeight: 1.1 }}>
         Realtime monitoring{" "}
         <span style={{ color: "var(--accent-9)" }}>for your entire business</span>
       </Heading>
       <Text size="4" color="gray" style={{ maxWidth: "550px" }}>
-        Track every inch of your product, monitor potential issues or
-        opportunities, and respond by making data-driven decisions.
+        Ingest product events, identify users, publish live insights, and let an
+        AI copilot summarize what just happened.
       </Text>
       <Box>
         <Button size="4" asChild>
@@ -73,19 +73,19 @@ function Features() {
       <Grid columns={{ initial: "1", md: "3" }} gap="4">
         {[
           {
-            icon: "\u{1F3AF}",
+            icon: "🎯",
             title: "Purpose built",
-            desc: "Designed specifically for modern product teams who need real-time event tracking",
+            desc: "Log, identify, and insight APIs modeled after LogSnag, owned entirely by the Rust backend",
           },
           {
-            icon: "\u26A1",
+            icon: "⚡",
             title: "Lightning quick",
             desc: "Get real-time insights in milliseconds with our high-performance event pipeline",
           },
           {
-            icon: "\u{1F4B0}",
-            title: "10,000 events free",
-            desc: "Start monitoring with a generous free tier, no credit card required",
+            icon: "🤖",
+            title: "AI copilot",
+            desc: "Channel summaries, anomaly hints, and natural-language questions over your event stream",
           },
         ].map((feature, index) => (
           <Card key={index} size="2">

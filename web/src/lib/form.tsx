@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormState } from "react-dom";
+import { useState } from "react";
 import { Callout, Text } from "@radix-ui/themes";
 
 export function Form({
@@ -8,16 +8,19 @@ export function Form({
   action,
 }: {
   children: React.ReactNode;
-  action: (prevState: any, formData: FormData) => Promise<ActionResult>;
+  action: (formData: FormData) => Promise<ActionResult>;
 }) {
-  const [state, formAction] = useFormState(action, {
-    error: null,
-  });
+  const [error, setError] = useState<string | null>(null);
   return (
-    <form action={formAction}>
-      {state.error && (
+    <form
+      action={async (formData) => {
+        const result = await action(formData);
+        setError(result.error);
+      }}
+    >
+      {error && (
         <Callout.Root color="red" size="1" mb="3">
-          <Callout.Text>{state.error}</Callout.Text>
+          <Callout.Text>{error}</Callout.Text>
         </Callout.Root>
       )}
       {children}

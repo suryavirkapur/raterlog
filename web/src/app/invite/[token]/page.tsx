@@ -1,11 +1,8 @@
-import db from "@/lib/db";
-import { validateRequest } from "@/lib/auth";
+"use client";
+
+import { api, apiOptional, type Invite } from "@/lib/api";
 import { ActionResult, Form } from "@/lib/form";
-import { generateId } from "lucia";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
-  Box,
   Button,
   Card,
   Flex,
@@ -15,12 +12,23 @@ import {
   Separator,
 } from "@radix-ui/themes";
 import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-export default async function Page({ params }: { params: { token: string } }) {
-  const invite = await db.invite.findUnique({
-    where: { token: params.token },
-    include: { company: true },
-  });
+export default function Page() {
+  const params = useParams<{ token: string }>();
+  const router = useRouter();
+  const [invite, setInvite] = useState<Invite | null | undefined>(undefined);
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiOptional<Invite>(`/api/invites/${params.token}`).then(setInvite);
+    apiOptional<{ email: string }>("/api/auth/me").then((me) =>
+      setEmail(me?.email ?? null)
+    );
+  }, [params.token]);
+
+  if (invite === undefined) return null;
 
   if (!invite) {
     return (
@@ -54,13 +62,13 @@ export default async function Page({ params }: { params: { token: string } }) {
     );
   }
 
-  if (new Date() > invite.expiresAt) {
+  if (new Date(invite.expiresAt) < new Date()) {
     return (
       <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
         <Flex direction="column" gap="4" align="center">
           <Heading size="5">Invite Expired</Heading>
           <Text color="gray" align="center">
-            This invitation to <strong>{invite.company.name}</strong> has expired.
+            This invitation to <strong>{invite.companyName}</strong> has expired.
             Ask the team admin to send a new one.
           </Text>
           <Button asChild variant="soft">
@@ -71,66 +79,36 @@ export default async function Page({ params }: { params: { token: string } }) {
     );
   }
 
-  const { user } = await validateRequest();
-
-  // Logged in - check email match and accept
-  if (user) {
-    const acceptInvite = async (): Promise<ActionResult> => {
-      "use server";
-      const { user: currentUser } = await validateRequest();
-      if (!currentUser) return { error: "Unauthorized" };
-
-      // Re-fetch invite to check status
-      const freshInvite = await db.invite.findUnique({
-        where: { token: params.token },
+  async function accept(): Promise<ActionResult> {
+    try {
+      await api(`/api/invites/${params.token}/accept`, {
+        method: "POST",
+        body: "{}",
       });
-      if (!freshInvite || freshInvite.status !== "pending")
-        return { error: "Invite no longer valid" };
+      router.push(`/dash/${invite!.companyID}`);
+      router.refresh();
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Accept failed" };
+    }
+  }
 
-      // Check if already a member
-      const existing = await db.companyUser.findFirst({
-        where: { companyID: freshInvite.companyID, userID: currentUser.id },
-      });
-      if (existing) {
-        await db.invite.update({
-          where: { id: freshInvite.id },
-          data: { status: "accepted" },
-        });
-        return { error: "" };
-      }
-
-      // Add user to company
-      await db.companyUser.create({
-        data: {
-          companyID: freshInvite.companyID,
-          userID: currentUser.id,
-        },
-      });
-
-      // Mark invite as accepted
-      await db.invite.update({
-        where: { id: freshInvite.id },
-        data: { status: "accepted" },
-      });
-
-      revalidatePath(`/dash/${freshInvite.companyID}`);
-      return { error: "" };
-    };
-
-    // Auto-accept if email matches
-    if (user.email === invite.email) {
+  if (email) {
+    if (email === invite.email) {
       return (
         <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
           <Flex direction="column" gap="4" align="center">
-            <Badge size="2" variant="soft">Team Invitation</Badge>
+            <Badge size="2" variant="soft">
+              Team Invitation
+            </Badge>
             <Heading size="5" align="center">
-              Join {invite.company.name}
+              Join {invite.companyName}
             </Heading>
             <Text color="gray" align="center" size="2">
-              You ({user.email}) have been invited to join{" "}
-              <strong>{invite.company.name}</strong> on Raterlog.
+              You ({email}) have been invited to join{" "}
+              <strong>{invite.companyName}</strong> on Raterlog.
             </Text>
-            <Form action={acceptInvite}>
+            <Form action={accept}>
               <Button type="submit" size="3" style={{ width: "100%" }}>
                 Accept &amp; Join
               </Button>
@@ -139,15 +117,13 @@ export default async function Page({ params }: { params: { token: string } }) {
         </Card>
       );
     }
-
-    // Email mismatch
     return (
       <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
         <Flex direction="column" gap="4" align="center">
           <Heading size="5">Wrong Account</Heading>
           <Text color="gray" align="center" size="2">
             This invite was sent to <strong>{invite.email}</strong> but
-            you&apos;re logged in as <strong>{user.email}</strong>.
+            you&apos;re logged in as <strong>{email}</strong>.
           </Text>
           <Separator size="4" />
           <Text size="2" color="gray">
@@ -158,18 +134,18 @@ export default async function Page({ params }: { params: { token: string } }) {
     );
   }
 
-  // Not logged in - show sign up / log in options
   return (
     <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
       <Flex direction="column" gap="4" align="center">
-        <Badge size="2" variant="soft">Team Invitation</Badge>
+        <Badge size="2" variant="soft">
+          Team Invitation
+        </Badge>
         <Heading size="5" align="center">
-          Join {invite.company.name}
+          Join {invite.companyName}
         </Heading>
         <Text color="gray" align="center" size="2">
-          You&apos;ve been invited to join{" "}
-          <strong>{invite.company.name}</strong> on Raterlog.
-          Sign in or create an account to accept.
+          You&apos;ve been invited to join <strong>{invite.companyName}</strong>{" "}
+          on Raterlog. Sign in or create an account to accept.
         </Text>
         <Text size="1" color="gray">
           Invited: {invite.email}
@@ -177,12 +153,16 @@ export default async function Page({ params }: { params: { token: string } }) {
         <Separator size="4" />
         <Flex direction="column" gap="3" style={{ width: "100%" }}>
           <Button size="3" asChild style={{ width: "100%" }}>
-            <Link href={`/signup?email=${encodeURIComponent(invite.email)}&invite=${params.token}`}>
+            <Link
+              href={`/signup?email=${encodeURIComponent(invite.email)}&invite=${params.token}`}
+            >
               Create account
             </Link>
           </Button>
           <Button size="3" variant="outline" asChild style={{ width: "100%" }}>
-            <Link href={`/signin?email=${encodeURIComponent(invite.email)}&invite=${params.token}`}>
+            <Link
+              href={`/signin?email=${encodeURIComponent(invite.email)}&invite=${params.token}`}
+            >
               Sign in
             </Link>
           </Button>

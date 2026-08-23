@@ -1,27 +1,48 @@
-import { Form } from "@/lib/form";
-import { Argon2id } from "oslo/password";
-import { cookies } from "next/headers";
-import { lucia, validateRequest } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import db from "@/lib/db";
+"use client";
+
+import { Form, ActionResult } from "@/lib/form";
+import { api } from "@/lib/api";
 import { Box, Button, Flex, Heading, Text, Card, TextField, Callout } from "@radix-ui/themes";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { email?: string; invite?: string };
-}) {
-  const { user } = await validateRequest();
-  if (user) {
-    if (searchParams.invite) {
-      return redirect(`/invite/${searchParams.invite}`);
+export default function Page() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteEmail = searchParams.get("email") || "";
+  const inviteToken = searchParams.get("invite") || "";
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    api("/api/auth/me")
+      .then(() => {
+        router.replace(inviteToken ? `/invite/${inviteToken}` : "/dash");
+      })
+      .catch(() => setReady(true));
+  }, [inviteToken, router]);
+
+  if (!ready) return null;
+
+  async function login(formData: FormData): Promise<ActionResult> {
+    const email = String(formData.get("email") || "");
+    const password = String(formData.get("password") || "");
+    try {
+      await api("/api/auth/signin", {
+        method: "POST",
+        body: JSON.stringify({
+          email,
+          password,
+          invite_token: inviteToken,
+        }),
+      });
+      router.push(inviteToken ? `/invite/${inviteToken}` : "/dash");
+      router.refresh();
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Sign in failed" };
     }
-    return redirect("/dash");
   }
-
-  const inviteEmail = searchParams.email || "";
-  const inviteToken = searchParams.invite || "";
 
   return (
     <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
@@ -36,7 +57,6 @@ export default async function Page({
           </Callout.Root>
         )}
         <Form action={login}>
-          <input type="hidden" name="inviteToken" value={inviteToken} />
           <Flex direction="column" gap="4">
             <label>
               <Text as="div" size="2" mb="1" weight="medium">Email</Text>
@@ -64,65 +84,4 @@ export default async function Page({
       </Flex>
     </Card>
   );
-}
-
-async function login(_: any, formData: FormData): Promise<ActionResult> {
-  "use server";
-
-  const password = formData.get("password");
-  if (typeof password !== "string" || password.length < 6 || password.length > 255) {
-    return { error: "Invalid password" };
-  }
-
-  const email = formData.get("email");
-  if (
-    typeof email !== "string" ||
-    !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/.test(email)
-  ) {
-    return { error: "Invalid email" };
-  }
-
-  const existingUser = await db.user.findFirst({ where: { email } });
-  if (!existingUser) {
-    return { error: "Incorrect username or password" };
-  }
-
-  const validPassword = await new Argon2id().verify(existingUser.password, password);
-  if (!validPassword) {
-    return { error: "Incorrect username or password" };
-  }
-
-  // Accept invite if present
-  const inviteToken = formData.get("inviteToken");
-  if (typeof inviteToken === "string" && inviteToken.length > 0) {
-    const invite = await db.invite.findUnique({ where: { token: inviteToken } });
-    if (invite && invite.status === "pending" && new Date() < invite.expiresAt && invite.email === email) {
-      const alreadyMember = await db.companyUser.findFirst({
-        where: { companyID: invite.companyID, userID: existingUser.id },
-      });
-      if (!alreadyMember) {
-        await db.companyUser.create({
-          data: { companyID: invite.companyID, userID: existingUser.id },
-        });
-      }
-      await db.invite.update({
-        where: { id: invite.id },
-        data: { status: "accepted" },
-      });
-    }
-  }
-
-  const session = await lucia.createSession(existingUser.id, {});
-  const sessionCookie = lucia.createSessionCookie(session.id);
-  cookies().set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes);
-
-  if (typeof inviteToken === "string" && inviteToken.length > 0) {
-    const invite = await db.invite.findUnique({ where: { token: inviteToken } });
-    if (invite) return redirect(`/dash/${invite.companyID}`);
-  }
-  return redirect("/dash");
-}
-
-interface ActionResult {
-  error: string;
 }

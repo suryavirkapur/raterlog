@@ -1,28 +1,47 @@
-import db from "@/lib/db";
-import { Argon2id } from "oslo/password";
-import { cookies } from "next/headers";
-import { lucia, validateRequest } from "@/lib/auth";
-import { redirect } from "next/navigation";
-import { generateId } from "lucia";
-import { Form } from "@/lib/form";
+"use client";
+
+import { api } from "@/lib/api";
+import { ActionResult, Form } from "@/lib/form";
 import { Flex, Box, Button, Heading, Text, Card, TextField, Callout } from "@radix-ui/themes";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: { email?: string; invite?: string };
-}) {
-  const { user } = await validateRequest();
-  if (user) {
-    if (searchParams.invite) {
-      return redirect(`/invite/${searchParams.invite}`);
+export default function Page() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteEmail = searchParams.get("email") || "";
+  const inviteToken = searchParams.get("invite") || "";
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    api("/api/auth/me")
+      .then(() => {
+        router.replace(inviteToken ? `/invite/${inviteToken}` : "/dash");
+      })
+      .catch(() => setReady(true));
+  }, [inviteToken, router]);
+
+  if (!ready) return null;
+
+  async function signup(formData: FormData): Promise<ActionResult> {
+    try {
+      await api("/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({
+          name: String(formData.get("name") || ""),
+          email: String(formData.get("email") || ""),
+          password: String(formData.get("password") || ""),
+          invite_token: inviteToken,
+        }),
+      });
+      router.push(inviteToken ? `/invite/${inviteToken}` : "/dash");
+      router.refresh();
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Sign up failed" };
     }
-    return redirect("/dash");
   }
-
-  const inviteEmail = searchParams.email || "";
-  const inviteToken = searchParams.invite || "";
 
   return (
     <Card size="3" style={{ width: "100%", maxWidth: "420px" }}>
@@ -37,7 +56,6 @@ export default async function Page({
           </Callout.Root>
         )}
         <Form action={signup}>
-          <input type="hidden" name="inviteToken" value={inviteToken} />
           <Flex direction="column" gap="4">
             <label>
               <Text as="div" size="2" mb="1" weight="medium">Name</Text>
@@ -69,64 +87,4 @@ export default async function Page({
       </Flex>
     </Card>
   );
-}
-
-async function signup(_: any, formData: FormData): Promise<ActionResult> {
-  "use server";
-  const name = formData.get("name");
-  if (typeof name !== "string" || name.length < 3 || name.length > 31) {
-    return { error: "Invalid name" };
-  }
-  const password = formData.get("password");
-  if (typeof password !== "string" || password.length < 6 || password.length > 255) {
-    return { error: "Invalid password" };
-  }
-  const email = formData.get("email");
-  if (
-    typeof email !== "string" ||
-    !/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/.test(email)
-  ) {
-    return { error: "Invalid email" };
-  }
-
-  const existingUser = await db.user.findFirst({ where: { email } });
-  if (existingUser) {
-    return { error: "Email exists!" };
-  }
-
-  const hashedPassword = await new Argon2id().hash(password);
-  const userId = generateId(15);
-
-  await db.user.create({
-    data: { id: userId, name, email, password: hashedPassword },
-  });
-
-  // Accept invite if present
-  const inviteToken = formData.get("inviteToken");
-  if (typeof inviteToken === "string" && inviteToken.length > 0) {
-    const invite = await db.invite.findUnique({ where: { token: inviteToken } });
-    if (invite && invite.status === "pending" && new Date() < invite.expiresAt && invite.email === email) {
-      await db.companyUser.create({
-        data: { companyID: invite.companyID, userID: userId },
-      });
-      await db.invite.update({
-        where: { id: invite.id },
-        data: { status: "accepted" },
-      });
-    }
-  }
-
-  const session = await lucia.createSession(userId, {});
-  const sessionCookie = lucia.createSessionCookie(session.id);
-  cookies().set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes);
-
-  if (typeof inviteToken === "string" && inviteToken.length > 0) {
-    const invite = await db.invite.findUnique({ where: { token: inviteToken } });
-    if (invite) return redirect(`/dash/${invite.companyID}`);
-  }
-  return redirect("/dash");
-}
-
-interface ActionResult {
-  error: string;
 }
