@@ -1,0 +1,1 @@
+import{et as e,rt as t}from"./radius.prop-Dy2dHUsF.js";var n=t(e(),1),r=globalThis?.document?n.useLayoutEffect:()=>{},i=Object.defineProperty,a=(e,t)=>i(e,`name`,{value:t,configurable:!0});function o(e){let t=n.useRef(e);return n.useEffect(()=>{t.current=e}),n.useMemo(()=>((...e)=>t.current?.(...e)),[])}a(o,`useCallbackRef`);export{r as n,o as t};

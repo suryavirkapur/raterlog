@@ -1,33 +1,34 @@
-"use client";
-
 import { useState } from "react";
-import { Card, Flex, Text, Code, Button } from "@radix-ui/themes";
+import { Button, Card, Code, Flex, Text } from "@radix-ui/themes";
 import { Eye, EyeOff } from "lucide-react";
-import { Form } from "@/lib/form";
 
 export function TokenCard({
   tokenId,
   name,
   token,
-  deleteAction,
+  onDelete,
 }: {
   tokenId: number;
   name: string;
   token: string;
-  deleteAction: (_: any, formData: FormData) => Promise<{ error: string | null }>;
+  onDelete: (tokenId: number) => Promise<void> | void;
 }) {
   const [visible, setVisible] = useState(false);
+  const [pending, setPending] = useState(false);
 
   return (
     <Card size="2">
       <Flex align="center" justify="between">
         <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
-          <Text weight="bold" size="3">{name}</Text>
+          <Text weight="bold" size="3">
+            {name}
+          </Text>
           <Flex align="center" gap="2">
             <Code size="2" style={{ userSelect: "all" }}>
               {visible ? token : "\u2022".repeat(24)}
             </Code>
             <button
+              type="button"
               onClick={() => setVisible(!visible)}
               style={{
                 background: "none",
@@ -43,10 +44,20 @@ export function TokenCard({
             </button>
           </Flex>
         </Flex>
-        <Form action={deleteAction}>
-          <input type="hidden" name="tokenId" value={tokenId} />
-          <Button type="submit" variant="soft" color="red" size="2">Delete</Button>
-        </Form>
+        <Button
+          type="button"
+          variant="soft"
+          color="red"
+          size="2"
+          loading={pending}
+          onClick={async () => {
+            setPending(true);
+            await onDelete(tokenId);
+            setPending(false);
+          }}
+        >
+          Delete
+        </Button>
       </Flex>
     </Card>
   );
