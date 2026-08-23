@@ -1,4 +1,5 @@
 "use client";
+import { API_URL } from "@/lib/api";
 import { Box, Card, Flex, Heading, Text, Badge, ScrollArea, Table, Separator } from "@radix-ui/themes";
 import React, { useEffect, useState } from "react";
 import {
@@ -24,7 +25,6 @@ interface LogItem {
 
 interface LiveLogsProps {
   channelID: string;
-  token: string;
   icon: string;
 }
 
@@ -123,7 +123,7 @@ const formatTimestamp = (ts: string) => {
   }
 };
 
-const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, token, icon }) => {
+const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, icon }) => {
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [eventFrequency, setEventFrequency] = useState<
     { name: string; count: number }[]
@@ -135,10 +135,8 @@ const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, token, icon }) => {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
-        const response = await fetch(`http://localhost:8080/log/${channelID}`, {
-          headers: {
-            Authorization: token,
-          },
+        const response = await fetch(`${API_URL}/api/logs/${channelID}`, {
+          credentials: "include",
         });
         if (!response.ok) {
           throw new Error("Failed to fetch logs");
@@ -180,7 +178,7 @@ const LiveLogs: React.FC<LiveLogsProps> = ({ channelID, token, icon }) => {
     fetchLogs();
     const intervalId = setInterval(fetchLogs, 5000);
     return () => clearInterval(intervalId);
-  }, [channelID, token]);
+  }, [channelID]);
 
   return (
     <Flex direction="column" gap="4">

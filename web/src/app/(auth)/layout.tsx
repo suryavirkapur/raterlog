@@ -1,9 +1,11 @@
+import { Suspense } from "react";
+import "@radix-ui/themes/styles.css";
+import { Theme, Container } from "@radix-ui/themes";
+
 export const metadata = {
   title: "Raterlog Login",
   description: "",
 };
-import "@radix-ui/themes/styles.css";
-import { Theme, Container } from "@radix-ui/themes";
 
 export default function RootLayout({
   children,
@@ -20,8 +22,17 @@ export default function RootLayout({
           scaling="95%"
           appearance="dark"
         >
-          <Container size="1" p="4" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {children}
+          <Container
+            size="1"
+            p="4"
+            style={{
+              minHeight: "100vh",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Suspense>{children}</Suspense>
           </Container>
         </Theme>
       </body>
