@@ -1,0 +1,67 @@
+<!--
+  Storage tiering for the `events` table: hot parts on local disk, cold parts
+  on S3 (any S3-compatible endpoint — AWS S3, MinIO, GCS, Backblaze).
+
+  Mount this file into ClickHouse, e.g.:
+    volumes:
+      - ./deploy/clickhouse/storage.xml:/etc/clickhouse-server/config.d/storage.xml:ro
+
+  Set these env vars on the clickhouse container (read via `from_env`):
+    CLICKHOUSE_S3_ENDPOINT          full S3 URL incl. bucket + prefix,
+                                    e.g. http://minio:9000/raterlog-events/data/
+                                    or   https://s3.eu-west-1.amazonaws.com/my-bucket/raterlog/
+    CLICKHOUSE_S3_ACCESS_KEY_ID
+    CLICKHOUSE_S3_SECRET_ACCESS_KEY
+
+  Then tell the API to use the policy below:
+    CLICKHOUSE_STORAGE_POLICY=tiered
+    CLICKHOUSE_HOT_DAYS=30          # parts older than this move to `cold`
+
+  See docker-compose.tiered.yml for a complete local setup with MinIO.
+-->
+<clickhouse>
+    <storage_configuration>
+        <disks>
+            <!-- A second local disk for hot parts: disk names must be unique
+                 across a policy's volumes, so `hot` can't reuse `default`. -->
+            <local_hot>
+                <type>local</type>
+                <path>/var/lib/clickhouse/disks/hot/</path>
+            </local_hot>
+            <s3_cold>
+                <type>s3</type>
+                <endpoint from_env="CLICKHOUSE_S3_ENDPOINT"/>
+                <access_key_id from_env="CLICKHOUSE_S3_ACCESS_KEY_ID"/>
+                <secret_access_key from_env="CLICKHOUSE_S3_SECRET_ACCESS_KEY"/>
+            </s3_cold>
+            <!-- Local read-through cache in front of S3: cold reads only hit
+                 object storage for parts not already cached. -->
+            <s3_cold_cached>
+                <type>cache</type>
+                <disk>s3_cold</disk>
+                <path>/var/lib/clickhouse/disks/s3_cold_cache/</path>
+                <max_size>10Gi</max_size>
+            </s3_cold_cached>
+        </disks>
+        <policies>
+            <!-- New parts land on `hot` (local disk); the TTL moves them to
+                 `cold` (S3, read through the cache disk). The `default`
+                 volume mirrors the built-in `default` policy so an existing
+                 events table can be ALTERed onto this policy — ClickHouse
+                 requires the new policy to contain the old one's volumes. -->
+            <tiered>
+                <volumes>
+                    <hot>
+                        <disk>local_hot</disk>
+                    </hot>
+                    <default>
+                        <disk>default</disk>
+                    </default>
+                    <cold>
+                        <disk>s3_cold_cached</disk>
+                    </cold>
+                </volumes>
+            </tiered>
+        </policies>
+    </storage_configuration>
+</clickhouse>

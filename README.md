@@ -87,7 +87,32 @@ cd web && npm install && npm run dev             # :3000, proxies /api and /v1 t
 ## Configuration
 
 See `api/.env.example`. Required: `DATABASE_URL`, `CLICKHOUSE_URL`, `APP_URL`.
-Optional: `SMTP_HOST`/`SMTP_PORT` (invite emails; invites can also be shared as links), `OPENAI_API_KEY` (AI copilot), `DODO_*` (billing; endpoints return 503 when unset).
+Optional: `SMTP_HOST`/`SMTP_PORT` (invite emails; invites can also be shared as links), `OPENAI_API_KEY` (AI copilot), `DODO_*` (billing; endpoints return 503 when unset), `CLICKHOUSE_STORAGE_POLICY`/`CLICKHOUSE_HOT_DAYS` (storage tiering, below).
+
+### ClickHouse storage tiering (hot → S3)
+
+Off by default. When `CLICKHOUSE_STORAGE_POLICY` names a storage policy defined
+in the ClickHouse server config (e.g. `tiered`), the events table is created —
+or `ALTER`ed, idempotently — with `SETTINGS storage_policy = '<policy>'` and a
+second TTL `toDateTime(ts) + INTERVAL <CLICKHOUSE_HOT_DAYS> DAY TO VOLUME 'cold'`
+(default 30 days) alongside the existing 3-year delete TTL. Parts older than
+`CLICKHOUSE_HOT_DAYS` move to cheap object storage; queries stay transparent.
+
+`deploy/clickhouse/storage.xml` is a drop-in server config: an S3 disk
+(endpoint/keys from `CLICKHOUSE_S3_*` env vars via `from_env`), a local
+read-through cache disk in front of it, and a `tiered` policy with `hot` (a
+dedicated local disk), `cold` and `default` volumes. `default` mirrors the
+built-in policy so an existing events table can be ALTERed onto `tiered` —
+ClickHouse requires the new policy to contain the old policy's volumes.
+
+```sh
+# local demo with MinIO standing in for S3
+docker compose -f docker-compose.yml -f docker-compose.tiered.yml up --build
+```
+
+Per-plan retention (see Plans below) is enforced at query time — no read path
+returns events older than a project's plan history — and a daily background
+job deletes expired rows outright.
 
 ### Raterlog on Raterlog
 

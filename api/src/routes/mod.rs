@@ -2,6 +2,7 @@ use crate::pg::{self, User};
 use crate::state::AppState;
 use crate::util::{api_token_from_request, error_json, session_id_from_request};
 use actix_web::{http::StatusCode, web::Data, HttpRequest, HttpResponse};
+use chrono::{DateTime, Duration, Utc};
 
 pub mod ai;
 pub mod analytics;
@@ -78,6 +79,24 @@ pub async fn require_channel_read(
             &format!("channel access check failed: {e}"),
         )),
     }
+}
+
+/// Earliest instant a project's plan allows it to read (plan retention
+/// cutoff). Falls back to the free plan — shortest retention — when billing
+/// can't be read, so we never over-serve history. The daily job in main.rs
+/// deletes old rows; this keeps stale rows from being returned in between.
+pub async fn retention_cutoff(state: &Data<AppState>, company_id: &str) -> DateTime<Utc> {
+    let plan = match pg::company_billing(&state.client, company_id).await {
+        Ok(Some(b)) => crate::billing::plan(&b.plan),
+        _ => crate::billing::plan("free"),
+    };
+    Utc::now() - Duration::days(plan.retention_days.max(1) as i64)
+}
+
+/// `retention_cutoff` as an `EventFilter::since` bound. `since` is exclusive,
+/// so subtract 1 to keep events exactly at the cutoff visible.
+pub async fn retention_since(state: &Data<AppState>, company_id: &str) -> u64 {
+    crate::ch::id_floor(retention_cutoff(state, company_id).await).saturating_sub(1)
 }
 
 /// Resolve the project for a Bearer token that must be able to *ingest* —

@@ -10,7 +10,7 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use super::require_company_member;
+use super::{require_company_member, retention_cutoff, retention_since};
 
 fn range_start(range: Option<&String>) -> chrono::DateTime<Utc> {
     let d = match range.map(String::as_str) {
@@ -33,9 +33,10 @@ pub async fn timeseries(req: HttpRequest, path: web::Path<String>, state: web::D
         return r;
     }
     let hourly = opt(&q, "interval") == Some("hour") || (opt(&q, "interval").is_none() && opt(&q, "range") == Some("24h"));
+    let from = range_start(q.get("range")).max(retention_cutoff(&state, &company_id).await);
     match state
         .ch
-        .timeseries(&company_id, range_start(q.get("range")), hourly, opt(&q, "channel"), opt(&q, "event"))
+        .timeseries(&company_id, from, hourly, opt(&q, "channel"), opt(&q, "event"))
         .await
     {
         Ok(v) => json_ok(v),
@@ -50,9 +51,10 @@ pub async fn breakdown(req: HttpRequest, path: web::Path<String>, state: web::Da
         return r;
     }
     let limit = opt(&q, "limit").and_then(|v| v.parse().ok()).unwrap_or(20);
+    let from = range_start(q.get("range")).max(retention_cutoff(&state, &company_id).await);
     match state
         .ch
-        .breakdown(&company_id, range_start(q.get("range")), opt(&q, "by").unwrap_or("event"), opt(&q, "channel"), limit)
+        .breakdown(&company_id, from, opt(&q, "by").unwrap_or("event"), opt(&q, "channel"), limit)
         .await
     {
         Ok(v) => json_ok(v),
@@ -78,7 +80,8 @@ pub async fn funnel(req: HttpRequest, path: web::Path<String>, body: web::Json<F
         return error_json(StatusCode::BAD_REQUEST, "a funnel needs 2 to 8 steps");
     }
     let window = body.window_hours.unwrap_or(24 * 7).clamp(1, 24 * 90) * 3600;
-    match state.ch.funnel(&company_id, range_start(body.range.as_ref()), &steps, window).await {
+    let from = range_start(body.range.as_ref()).max(retention_cutoff(&state, &company_id).await);
+    match state.ch.funnel(&company_id, from, &steps, window).await {
         Ok(counts) => json_ok(
             steps
                 .iter()
@@ -100,7 +103,12 @@ pub async fn user_journey(req: HttpRequest, path: web::Path<(String, String)>, s
         Ok(u) => u,
         Err(e) => return error_json(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     };
-    let f = EventFilter { user_id: Some(user_id), limit: 500, ..Default::default() };
+    let f = EventFilter {
+        user_id: Some(user_id),
+        limit: 500,
+        since: Some(retention_since(&state, &company_id).await),
+        ..Default::default()
+    };
     match state.ch.list(&company_id, &f).await {
         Ok(rows) => json_ok(serde_json::json!({
             "user": user,
@@ -148,7 +156,8 @@ pub async fn summary(req: HttpRequest, path: web::Path<String>, state: web::Data
     if let Err(r) = require_company_member(&req, &state, &company_id).await {
         return r;
     }
-    match state.ch.summary(&company_id, range_start(q.get("range"))).await {
+    let from = range_start(q.get("range")).max(retention_cutoff(&state, &company_id).await);
+    match state.ch.summary(&company_id, from).await {
         Ok(v) => json_ok(v),
         Err(e) => error_json(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
