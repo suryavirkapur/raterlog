@@ -138,6 +138,43 @@ export type Plan = {
   retention_days: number;
   features: string[];
 };
+export type MonitorCondition = "count_above" | "count_below" | "absent";
+export type Monitor = {
+  id: string;
+  companyID: string;
+  name: string;
+  enabled: boolean;
+  channel?: string | null; // channel name
+  event?: string | null; // exact event name
+  tag?: string | null; // "key:value"
+  condition: MonitorCondition;
+  threshold: number; // ignored for "absent"
+  windowMinutes: number;
+  cooldownMinutes: number;
+  notifyEmails: string[];
+  webhookUrls: string[]; // Slack/Discord payloads detected by host; generic JSON otherwise
+  notifyResolved: boolean; // send a "recovered" notice on alerting → ok
+  state: "ok" | "alerting";
+  lastCheckedAt?: string | null;
+  lastTriggeredAt?: string | null;
+  createdAt: string;
+};
+/** PATCH semantics: omit a field to keep it, pass "" to clear channel/event/tag. */
+export type MonitorInput = {
+  name?: string;
+  enabled?: boolean;
+  channel?: string;
+  event?: string;
+  tag?: string;
+  condition?: MonitorCondition;
+  threshold?: number;
+  window_minutes?: number;
+  cooldown_minutes?: number;
+  notify_emails?: string[];
+  webhook_urls?: string[];
+  notify_resolved?: boolean;
+};
+
 export type AiSummary = {
   summary: string;
   event_counts: { name: string; count: number }[];
@@ -219,6 +256,21 @@ export const billing = {
   checkout: (projectId: string, plan: PlanId, interval: "month" | "year") =>
     post<{ url: string }>(`/api/companies/${projectId}/billing/checkout`, { plan, interval }),
   portal: (projectId: string) => post<{ url: string }>(`/api/companies/${projectId}/billing/portal`),
+};
+
+export const monitors = {
+  list: (projectId: string) => api<Monitor[]>(`/api/companies/${projectId}/monitors`),
+  create: (projectId: string, b: MonitorInput) =>
+    post<Monitor>(`/api/companies/${projectId}/monitors`, b),
+  update: (projectId: string, monitorId: string, b: MonitorInput) =>
+    patch<Monitor>(`/api/companies/${projectId}/monitors/${monitorId}`, b),
+  delete: (projectId: string, monitorId: string) =>
+    del<unknown>(`/api/companies/${projectId}/monitors/${monitorId}`),
+  /** Sends a test notification to the monitor's targets; `ok` = all delivered. */
+  test: (projectId: string, monitorId: string) =>
+    post<{ ok: boolean; sent: number; targets: number; errors: string[] }>(
+      `/api/companies/${projectId}/monitors/${monitorId}/test`,
+    ),
 };
 
 export const ai = {

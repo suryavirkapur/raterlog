@@ -13,6 +13,7 @@ mod billing;
 mod ch;
 mod mail;
 mod mcp;
+mod monitor;
 mod pg;
 mod routes;
 mod state;
@@ -90,6 +91,7 @@ async fn main() -> std::io::Result<()> {
     });
 
     spawn_retention_job(data.clone());
+    monitor::spawn(data.clone());
 
     HttpServer::new(move || {
         // Same-origin dashboard needs no CORS; this is for browser-side
@@ -149,6 +151,11 @@ async fn main() -> std::io::Result<()> {
             .service(routes::analytics::user_journey)
             .service(routes::analytics::usage)
             .service(routes::analytics::summary)
+            .service(routes::monitors::list_monitors)
+            .service(routes::monitors::create_monitor)
+            .service(routes::monitors::update_monitor)
+            .service(routes::monitors::delete_monitor)
+            .service(routes::monitors::test_monitor)
             .service(routes::billing::plans)
             .service(routes::billing::checkout)
             .service(routes::billing::portal)

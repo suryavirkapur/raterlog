@@ -1,6 +1,6 @@
 # Raterlog
 
-Real-time event tracking for products: send an event with one HTTP request and get a live feed, push notifications, charts, funnels, user journeys and KPI insights. LogSnag-compatible API.
+Real-time event tracking for products: send an event with one HTTP request and get a live feed, push notifications, threshold monitors, charts, funnels, user journeys and KPI insights. LogSnag-compatible API.
 
 ## Architecture
 
@@ -37,8 +37,8 @@ Legacy: `POST /api/logs` / `POST /log` with `channel_id`, `event_name`, `event_p
 claude mcp add --transport http raterlog https://raterlog.com/mcp --header "Authorization: Bearer $TOKEN"
 ```
 
-Write tools: `log_event`, `identify_user`, `set_insight`, `increment_insight`.
-Read tools: `search_events`, `event_stats`, `event_timeseries`, `top_breakdown`, `funnel`, `user_journey`, `list_channels`, `list_insights`, `get_usage`.
+Write tools: `log_event`, `identify_user`, `set_insight`, `increment_insight`, `create_monitor`.
+Read tools: `search_events`, `event_stats`, `event_timeseries`, `top_breakdown`, `funnel`, `user_journey`, `list_channels`, `list_insights`, `list_monitors`, `get_usage`.
 Implementation: `api/src/mcp.rs`. Setup guide for every client: `/docs/agents` (and the in-app Setup guide with your token filled in); summary for LLMs at `/llms.txt`.
 
 ## Dashboard API (session cookie)
@@ -47,10 +47,21 @@ Auth `/api/auth/*`; projects `/api/companies[/{id}]` with channels, tokens, invi
 feed `GET /api/companies/{id}/events?channel&event&user_id&tag=k:v&q&before&since&limit`;
 analytics `/api/companies/{id}/analytics/{timeseries,breakdown,funnel}`;
 journeys `GET /api/companies/{id}/users/{userId}`; usage `GET /api/companies/{id}/usage`;
+monitors `GET|POST /api/companies/{id}/monitors`, `PATCH|DELETE /api/companies/{id}/monitors/{mid}`, `POST .../monitors/{mid}/test`;
 billing `GET /api/plans`, `POST /api/companies/{id}/billing/{checkout,portal}`, `POST /api/billing/webhook`;
 AI `POST /api/channels/{id}/ai/{summarize,query}`. Health: `GET /health`.
 
 The typed client in `web/src/lib/api.ts` is the contract.
+
+## Monitors
+
+Server-side threshold alerts (Axiom-style) on your event stream. A monitor counts events in ClickHouse once a minute — optionally narrowed to a channel, an event name and/or a `key:value` tag — and alerts when:
+
+- `count_above` — more than `threshold` events in `window_minutes` (spike),
+- `count_below` — fewer than `threshold` events (drop),
+- `absent` — **no** matching events at all in the window (dead heartbeat/cron).
+
+Alerts go to a list of emails (via `SMTP_*` settings) and/or webhook URLs: `hooks.slack.com` gets a Slack payload, `discord.com`/`discordapp.com` hosts get Discord's, and any other URL gets a generic JSON POST describing the monitor. On recovery a "resolved" notice can be sent (`notifyResolved`). `cooldown_minutes` suppresses repeated alerts; the evaluator runs inside the same binary (`api/src/monitor.rs`) and uses a Postgres advisory lock, so multiple replicas evaluate each tick only once. Manage monitors in the app (Monitors page), via the dashboard API, or through the `list_monitors`/`create_monitor` MCP tools.
 
 ## Run locally
 

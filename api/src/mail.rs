@@ -1,30 +1,28 @@
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpStream;
 
-pub async fn send_invite_email(
+/// Plain-text email over unauthenticated SMTP (like a local relay). A no-op
+/// when `smtp_host` is empty, matching invite behaviour.
+pub async fn send_email(
     smtp_host: &str,
     smtp_port: u16,
-    app_url: &str,
     to: &str,
-    company_name: &str,
-    invite_token: &str,
+    subject: &str,
+    text: &str,
 ) -> Result<(), String> {
     if smtp_host.is_empty() {
-        tracing::info!("SMTP not configured; skipping invite email to {to}");
+        tracing::info!("SMTP not configured; skipping email to {to}");
         return Ok(());
     }
 
-    let invite_link = format!("{}/invite/{}", app_url.trim_end_matches('/'), invite_token);
     let body = format!(
         "From: Raterlog <noreply@raterlog.dev>\r\n\
          To: {to}\r\n\
-         Subject: You've been invited to join {company_name} on Raterlog\r\n\
+         Subject: {subject}\r\n\
          MIME-Version: 1.0\r\n\
          Content-Type: text/plain; charset=UTF-8\r\n\
          \r\n\
-         You have been invited to join {company_name} on Raterlog.\n\n\
-         Accept the invite: {invite_link}\n\n\
-         This link expires in 7 days.\n"
+         {text}"
     );
 
     let mut stream = TcpStream::connect((smtp_host, smtp_port))
@@ -81,4 +79,27 @@ pub async fn send_invite_email(
     expect_code(&mut reader, &mut line, "250").await?;
     write_line(&mut writer, "QUIT\r\n").await?;
     Ok(())
+}
+
+pub async fn send_invite_email(
+    smtp_host: &str,
+    smtp_port: u16,
+    app_url: &str,
+    to: &str,
+    company_name: &str,
+    invite_token: &str,
+) -> Result<(), String> {
+    let invite_link = format!("{}/invite/{}", app_url.trim_end_matches('/'), invite_token);
+    send_email(
+        smtp_host,
+        smtp_port,
+        to,
+        &format!("You've been invited to join {company_name} on Raterlog"),
+        &format!(
+            "You have been invited to join {company_name} on Raterlog.\n\n\
+             Accept the invite: {invite_link}\n\n\
+             This link expires in 7 days.\n"
+        ),
+    )
+    .await
 }

@@ -9,6 +9,7 @@
 
 use crate::billing;
 use crate::ch::{EventFilter, PublicEvent};
+use crate::monitor;
 use crate::pg;
 use crate::routes::log::{ingest_event, resolve_channel, value_to_tags, NewEvent};
 use crate::state::AppState;
@@ -26,6 +27,7 @@ just happened (signup, payment, deploy, error, agent task finished) — channels
 set notify=true only for events a human should be pinged about. Use identify_user to attach properties \
 to a user_id, and set_insight/increment_insight for live KPI tiles. To answer questions about what \
 happened, use search_events, event_stats, event_timeseries, top_breakdown, funnel and user_journey. \
+To get notified about patterns later, create_monitor sets up a threshold or absence alert (list_monitors shows them). \
 Ranges are 24h, 7d, 30d or 90d.";
 
 fn tools() -> Value {
@@ -163,6 +165,32 @@ fn tools() -> Value {
             "description": "Current plan, events used this month and limits.",
             "inputSchema": { "type": "object", "properties": {} },
             "annotations": ro
+        },
+        {
+            "name": "list_monitors",
+            "title": "List monitors",
+            "description": "List the project's threshold monitors: condition, filters, state (ok/alerting) and notify targets.",
+            "inputSchema": { "type": "object", "properties": {} },
+            "annotations": ro
+        },
+        {
+            "name": "create_monitor",
+            "title": "Create monitor",
+            "description": "Create a threshold monitor checked every minute: alert when matching events go above/below a count in a window, or when none arrive at all ('absent', e.g. a dead cron or heartbeat). Notify by email and/or webhook (Slack and Discord URLs are detected automatically).",
+            "inputSchema": { "type": "object", "required": ["name", "condition"], "properties": {
+                "name": { "type": "string" },
+                "condition": { "type": "string", "enum": ["count_above", "count_below", "absent"], "description": "'absent' alerts when no matching event arrives in the window." },
+                "threshold": { "type": "integer", "minimum": 0, "description": "Event count to compare against. Not used by 'absent'." },
+                "window_minutes": { "type": "integer", "minimum": 1, "maximum": 10080, "description": "Lookback window checked every minute. Default 60." },
+                "cooldown_minutes": { "type": "integer", "minimum": 0, "maximum": 10080, "description": "Min minutes between alerts. Default 60." },
+                "channel": { "type": "string", "description": "Only count this channel's events." },
+                "event": { "type": "string", "description": "Only count this exact event name." },
+                "tag": { "type": "string", "description": "Only count events with this tag, 'key:value'." },
+                "notify_emails": { "type": "array", "items": { "type": "string" } },
+                "webhook_urls": { "type": "array", "items": { "type": "string" }, "description": "Slack/Discord webhook URLs post in their format; other URLs get a generic JSON POST." },
+                "enabled": { "type": "boolean", "description": "Default true." }
+            }},
+            "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false }
         }
     ])
 }
@@ -320,6 +348,53 @@ async fn call_tool(state: &web::Data<AppState>, company_id: &str, name: &str, ar
                 "plan": plan.id, "events_used": used, "events_limit": plan.events_limit,
                 "period_start": start.to_rfc3339(), "period_end": end.to_rfc3339(), "retention_days": plan.retention_days
             }))
+        }
+        "list_monitors" => {
+            let m = pg::monitors_for_company(&state.client, company_id).await.map_err(|e| e.to_string())?;
+            Ok(json!({ "monitors": m }))
+        }
+        "create_monitor" => {
+            let spec = monitor::spec_from_input(
+                monitor::MonitorInput {
+                    name: str_arg(args, "name").map(str::to_string),
+                    enabled: args.get("enabled").and_then(Value::as_bool),
+                    channel: str_arg(args, "channel").map(str::to_string),
+                    event: str_arg(args, "event").map(str::to_string),
+                    tag: str_arg(args, "tag").map(str::to_string),
+                    condition: str_arg(args, "condition").map(str::to_string),
+                    threshold: args["threshold"].as_i64(),
+                    window_minutes: args["window_minutes"].as_i64().map(|v| v as i32),
+                    cooldown_minutes: args["cooldown_minutes"].as_i64().map(|v| v as i32),
+                    notify_emails: args["notify_emails"].as_array().map(|a| {
+                        a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()
+                    }),
+                    webhook_urls: args["webhook_urls"].as_array().map(|a| {
+                        a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()
+                    }),
+                    notify_resolved: None,
+                },
+                None,
+            )?;
+            let m = pg::create_monitor(
+                &state.client,
+                &generate_id(15),
+                company_id,
+                &spec.name,
+                spec.enabled,
+                spec.channel.as_deref(),
+                spec.event.as_deref(),
+                spec.tag.as_deref(),
+                &spec.condition,
+                spec.threshold,
+                spec.window_minutes,
+                spec.cooldown_minutes,
+                &spec.notify_emails,
+                &spec.webhook_urls,
+                spec.notify_resolved,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+            Ok(json!({ "monitor": m }))
         }
         other => Err(format!("unknown tool: {other}")),
     }
