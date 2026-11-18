@@ -17,6 +17,10 @@ export const MCP_TOOLS: { name: string; desc: string; write?: boolean }[] = [
   { name: "get_usage", desc: "Plan, events used this month and limits." },
 ];
 
+/** Shown next to the tool list: which token scope each kind of tool needs. */
+export const TOKEN_SCOPES_NOTE =
+  "Write tools need an ingest or full token, read tools a read or full token — tools/list only shows what your token can call.";
+
 export type AgentClient = { id: string; label: string; file?: string; lang: string; code: (url: string, token: string) => string; note?: string };
 
 export const AGENT_CLIENTS: AgentClient[] = [

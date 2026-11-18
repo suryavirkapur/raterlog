@@ -4,7 +4,7 @@ import { MarketingNav } from "@/components/marketing/MarketingNav";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { CodeBlock } from "@/components/marketing/CodeBlock";
 import { CodeTabs } from "@/components/marketing/CodeTabs";
-import { AGENT_CLIENTS, MCP_TOOLS, instrumentPrompt } from "@/lib/agents";
+import { AGENT_CLIENTS, MCP_TOOLS, TOKEN_SCOPES_NOTE, instrumentPrompt } from "@/lib/agents";
 
 const base = typeof location !== "undefined" ? location.origin : "https://raterlog.com";
 const MCP_URL = `${base}/mcp`;
@@ -45,6 +45,12 @@ export default function AgentsGuide() {
             open <strong>Settings → API tokens</strong>. One token = one project: the MCP connection only sees and
             writes that project. The in-app <strong>Setup guide</strong> shows every snippet below with your real
             token filled in.
+          </p>
+          <p>
+            Every token has a scope: <code>ingest</code> (default) can only write — send events, identify users,
+            set insights. <code>read</code> can only read — the MCP read tools below. <code>full</code> does both.
+            For an agent that should query your data, create a <code>read</code> or <code>full</code> token.
+            Tokens created before scopes existed are <code>full</code>.
           </p>
         </section>
 
@@ -89,7 +95,10 @@ export default function AgentsGuide() {
               ))}
             </tbody>
           </HTMLTable>
-          <p>Ranges are <code>24h</code>, <code>7d</code>, <code>30d</code> or <code>90d</code>. Channels are created on first use.</p>
+          <p>
+            {TOKEN_SCOPES_NOTE} Ranges are <code>24h</code>, <code>7d</code>, <code>30d</code> or <code>90d</code>.
+            Channels are created on first use.
+          </p>
         </section>
 
         <section id="instrument">

@@ -81,7 +81,9 @@ export default function Setup() {
   async function createToken() {
     setTokenBusy(true);
     try {
-      const t = await projects.createToken(projectId, "default");
+      // Full scope: this token both sends the test event and powers the MCP
+      // snippets below (read tools need a read or full token).
+      const t = await projects.createToken(projectId, "default", "full");
       setCreatedToken(t);
       toast({ message: "API token created", intent: "success", icon: "key" });
       reload();
@@ -164,6 +166,8 @@ export default function Setup() {
         ) : (
           <p style={{ fontSize: 13.5, opacity: 0.75, margin: "0 0 10px" }}>
             Your server authenticates with a Bearer token. Create one now — you can add more later.
+            This one gets <strong>full</strong> scope so the MCP snippets below work end to end;
+            create narrower <code>ingest</code> or <code>read</code> tokens in Settings → API tokens.
           </p>
         )}
         <Button

@@ -2,14 +2,14 @@
 
 > Real-time event tracking for products (LogSnag-compatible). Send an event with one HTTP request and get a live feed, push notifications, charts, funnels, user journeys and KPI insights. Base URL: https://raterlog.com
 
-All requests use a project API token: `Authorization: Bearer <token>` (Settings → API tokens). One token = one project.
+All requests use a project API token: `Authorization: Bearer <token>` (Settings → API tokens). One token = one project. Tokens have a scope: `ingest` (default; write only), `read` (read tools only) or `full` (both).
 
 ## MCP server
 
 - URL: https://raterlog.com/mcp — Streamable HTTP, stateless, JSON responses. Header `Authorization: Bearer <token>`.
 - Claude Code: `claude mcp add --transport http raterlog https://raterlog.com/mcp --header "Authorization: Bearer <token>"`
-- Write tools: log_event, identify_user, set_insight, increment_insight
-- Read tools: search_events, event_stats, event_timeseries, top_breakdown, funnel, user_journey, list_channels, list_insights, get_usage
+- Write tools: log_event, identify_user, set_insight, increment_insight (need an ingest or full token)
+- Read tools: search_events, event_stats, event_timeseries, top_breakdown, funnel, user_journey, list_channels, list_insights, get_usage (need a read or full token)
 - Ranges: 24h, 7d, 30d, 90d. Channels are created on first use.
 
 ## HTTP API

@@ -115,7 +115,8 @@ export default function Docs() {
           <p>
             Every request carries a project API token as a Bearer token. Tokens are created per
             project in <strong>Settings → API tokens</strong> and look like{" "}
-            <code>rl_…</code>. Keep them server-side — a token can write events for its project.
+            <code>rl_…</code>. Keep them server-side — an <code>ingest</code> or <code>full</code>{" "}
+            token can write events for its project (<code>read</code> tokens can only query it).
           </p>
           <CodeBlock label="header" code={`Authorization: Bearer ${TOKEN}`} />
         </section>

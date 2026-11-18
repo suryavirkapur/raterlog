@@ -226,11 +226,17 @@ pub async fn delete_invite(
     }
 }
 
+#[derive(Deserialize)]
+struct TokenInput {
+    name: String,
+    scope: Option<String>,
+}
+
 #[post("/api/companies/{company_id}/tokens")]
 pub async fn create_token(
     req: HttpRequest,
     path: web::Path<String>,
-    body: web::Json<NameInput>,
+    body: web::Json<TokenInput>,
     state: web::Data<AppState>,
 ) -> HttpResponse {
     let company_id = path.into_inner();
@@ -241,7 +247,19 @@ pub async fn create_token(
     if name.is_empty() {
         return error_json(StatusCode::BAD_REQUEST, "token name is required");
     }
-    match pg::create_token(&state.client, &company_id, name, &generate_id(24)).await {
+    let scope = match body.scope.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        None => pg::TokenScope::Ingest,
+        Some(s) => match pg::TokenScope::parse(s) {
+            Some(scope) => scope,
+            None => {
+                return error_json(
+                    StatusCode::BAD_REQUEST,
+                    "scope must be 'ingest', 'read' or 'full'",
+                )
+            }
+        },
+    };
+    match pg::create_token(&state.client, &company_id, name, &generate_id(24), scope).await {
         Ok(token) => json_created(token),
         Err(e) => error_json(
             StatusCode::INTERNAL_SERVER_ERROR,

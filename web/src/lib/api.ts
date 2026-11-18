@@ -49,7 +49,9 @@ function qs(params: Record<string, string | number | undefined | null>) {
 export type User = { id: string; name: string; email: string };
 export type Company = { id: string; name: string; billing: boolean };
 export type Channel = { id: string; name: string; icon: string; companyID: string };
-export type Token = { id: number; name: string; token: string; companyID: string };
+/** Token scope: `ingest` writes only, `read` reads only (MCP read tools, feed), `full` does both. */
+export type TokenScope = "ingest" | "read" | "full";
+export type Token = { id: number; name: string; token: string; scope: TokenScope; companyID: string };
 export type Member = { id: string; name: string; email: string };
 export type Invite = {
   id: string;
@@ -167,7 +169,8 @@ export const projects = {
   deleteChannel: (id: string, channelId: string) =>
     del<unknown>(`/api/companies/${id}/channels/${channelId}`),
 
-  createToken: (id: string, name: string) => post<Token>(`/api/companies/${id}/tokens`, { name }),
+  createToken: (id: string, name: string, scope: TokenScope = "ingest") =>
+    post<Token>(`/api/companies/${id}/tokens`, { name, scope }),
   deleteToken: (id: string, tokenId: number) => del<unknown>(`/api/companies/${id}/tokens/${tokenId}`),
 
   invite: (id: string, email: string) => post<Invite>(`/api/companies/${id}/invites`, { email }),

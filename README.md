@@ -14,7 +14,10 @@ One Rust binary serves everything:
 
 ## Ingest API (LogSnag-compatible)
 
-`Authorization: Bearer <token>` (create a token in Settings → Tokens).
+`Authorization: Bearer <token>` (create a token in Settings → Tokens). Tokens have a
+scope: `ingest` (default for new tokens) can only write, `read` can only read, `full`
+does both — tokens created before scopes existed are `full`. Ingest endpoints accept
+`ingest` or `full` tokens.
 
 ```sh
 curl -X POST https://raterlog.com/v1/log \
@@ -37,8 +40,9 @@ Legacy: `POST /api/logs` / `POST /log` with `channel_id`, `event_name`, `event_p
 claude mcp add --transport http raterlog https://raterlog.com/mcp --header "Authorization: Bearer $TOKEN"
 ```
 
-Write tools: `log_event`, `identify_user`, `set_insight`, `increment_insight`.
-Read tools: `search_events`, `event_stats`, `event_timeseries`, `top_breakdown`, `funnel`, `user_journey`, `list_channels`, `list_insights`, `get_usage`.
+Write tools: `log_event`, `identify_user`, `set_insight`, `increment_insight` — need an `ingest` or `full` token.
+Read tools: `search_events`, `event_stats`, `event_timeseries`, `top_breakdown`, `funnel`, `user_journey`, `list_channels`, `list_insights`, `get_usage` — need a `read` or `full` token.
+`tools/list` only shows the tools the token's scope allows.
 Implementation: `api/src/mcp.rs`. Setup guide for every client: `/docs/agents` (and the in-app Setup guide with your token filled in); summary for LLMs at `/llms.txt`.
 
 ## Dashboard API (session cookie)
