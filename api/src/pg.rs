@@ -26,12 +26,62 @@ pub struct Channel {
     pub company_id: String,
 }
 
+/// What a project API token may do: `ingest` writes (events, identify,
+/// insights), `read` reads (channel feed, MCP read tools), `full` does both.
+/// Tokens created before scopes existed are `full`.
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum TokenScope {
+    Ingest,
+    Read,
+    Full,
+}
+
+impl TokenScope {
+    pub fn parse(s: &str) -> Option<TokenScope> {
+        match s {
+            "ingest" => Some(TokenScope::Ingest),
+            "read" => Some(TokenScope::Read),
+            "full" => Some(TokenScope::Full),
+            _ => None,
+        }
+    }
+
+    /// Unknown values keep the pre-scopes behavior: full access.
+    pub fn from_db(s: &str) -> TokenScope {
+        TokenScope::parse(s).unwrap_or(TokenScope::Full)
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TokenScope::Ingest => "ingest",
+            TokenScope::Read => "read",
+            TokenScope::Full => "full",
+        }
+    }
+
+    pub fn can_ingest(self) -> bool {
+        matches!(self, TokenScope::Ingest | TokenScope::Full)
+    }
+
+    pub fn can_read(self) -> bool {
+        matches!(self, TokenScope::Read | TokenScope::Full)
+    }
+}
+
+impl std::fmt::Display for TokenScope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Token {
     pub id: i32,
     pub name: String,
     pub token: String,
+    pub scope: TokenScope,
     #[serde(rename = "companyID")]
     pub company_id: String,
 }
@@ -159,6 +209,7 @@ pub async fn ensure_schema(client: &Client) -> Result<(), tokio_postgres::Error>
                 "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 UNIQUE ("companyID", "userId")
             );
+            ALTER TABLE "Token" ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'full';
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "billingCustomerId" TEXT;
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "subscriptionId" TEXT;
@@ -443,7 +494,7 @@ pub async fn tokens_for_company(
 ) -> Result<Vec<Token>, tokio_postgres::Error> {
     let rows = client
         .query(
-            r#"SELECT id, name, token, "companyID" FROM "Token" WHERE "companyID" = $1 ORDER BY id DESC"#,
+            r#"SELECT id, name, token, scope, "companyID" FROM "Token" WHERE "companyID" = $1 ORDER BY id DESC"#,
             &[&company_id],
         )
         .await?;
@@ -453,7 +504,8 @@ pub async fn tokens_for_company(
             id: row.get(0),
             name: row.get(1),
             token: row.get(2),
-            company_id: row.get(3),
+            scope: TokenScope::from_db(row.get(3)),
+            company_id: row.get(4),
         })
         .collect())
 }
@@ -463,18 +515,20 @@ pub async fn create_token(
     company_id: &str,
     name: &str,
     token: &str,
+    scope: TokenScope,
 ) -> Result<Token, tokio_postgres::Error> {
     let row = client
         .query_one(
-            r#"INSERT INTO "Token" (name, token, "companyID") VALUES ($1, $2, $3) RETURNING id, name, token, "companyID""#,
-            &[&name, &token, &company_id],
+            r#"INSERT INTO "Token" (name, token, "companyID", scope) VALUES ($1, $2, $3, $4) RETURNING id, name, token, scope, "companyID""#,
+            &[&name, &token, &company_id, &scope.as_str()],
         )
         .await?;
     Ok(Token {
         id: row.get(0),
         name: row.get(1),
         token: row.get(2),
-        company_id: row.get(3),
+        scope: TokenScope::from_db(row.get(3)),
+        company_id: row.get(4),
     })
 }
 
@@ -491,35 +545,38 @@ pub async fn delete_token(
         .await
 }
 
+/// Look up a project token: the owning company and the token's scope.
 pub async fn token_company(
     client: &Client,
     token: &str,
-) -> Result<Option<String>, tokio_postgres::Error> {
+) -> Result<Option<(String, TokenScope)>, tokio_postgres::Error> {
     let row = client
         .query_opt(
-            r#"SELECT "companyID" FROM "Token" WHERE token = $1"#,
+            r#"SELECT "companyID", scope FROM "Token" WHERE token = $1"#,
             &[&token],
         )
         .await?;
-    Ok(row.map(|row| row.get(0)))
+    Ok(row.map(|row| {
+        let scope: String = row.get(1);
+        (row.get(0), TokenScope::from_db(&scope))
+    }))
 }
 
+/// The token's scope when it belongs to the channel's project, else `None`.
 pub async fn verify_token_for_channel(
     client: &Client,
     token: &str,
     channel_id: &str,
-) -> Result<bool, tokio_postgres::Error> {
+) -> Result<Option<TokenScope>, tokio_postgres::Error> {
     let row = client
-        .query_one(
-            r#"SELECT EXISTS(
-                SELECT 1 FROM "Token" t
+        .query_opt(
+            r#"SELECT t.scope FROM "Token" t
                 JOIN "Channel" c ON t."companyID" = c."companyID"
-                WHERE t.token = $1 AND c.id = $2
-            )"#,
+                WHERE t.token = $1 AND c.id = $2"#,
             &[&token, &channel_id],
         )
         .await?;
-    Ok(row.get(0))
+    Ok(row.map(|row| TokenScope::from_db(row.get(0))))
 }
 
 pub async fn user_can_read_channel(

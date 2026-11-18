@@ -181,8 +181,14 @@ async fn legacy_create(req: HttpRequest, data: LegacyLogInput, state: web::Data<
         return error_json(StatusCode::UNAUTHORIZED, "api token is required to ingest events");
     };
     match pg::verify_token_for_channel(&state.client, &token, &data.channel_id).await {
-        Ok(true) => {}
-        Ok(false) => return error_json(StatusCode::UNAUTHORIZED, "invalid api token"),
+        Ok(Some(scope)) if scope.can_ingest() => {}
+        Ok(Some(scope)) => {
+            return error_json(
+                StatusCode::FORBIDDEN,
+                &format!("token scope '{scope}' cannot ingest; use an ingest or full token"),
+            )
+        }
+        Ok(None) => return error_json(StatusCode::UNAUTHORIZED, "invalid api token"),
         Err(e) => return error_json(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     }
     let channel = match pg::channel_by_id(&state.client, &data.channel_id).await {

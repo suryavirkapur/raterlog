@@ -6,6 +6,8 @@
 //! The token picks the project, so no tool takes a `project` argument. Tools
 //! cover both directions: writing (log events, identify users, insights) and
 //! reading (search the feed, counts, breakdowns, funnels, user journeys).
+//! Write tools need an `ingest` or `full` token, read tools a `read` or `full`
+//! one; `tools/list` only advertises what the token's scope allows.
 
 use crate::billing;
 use crate::ch::{EventFilter, PublicEvent};
@@ -20,6 +22,35 @@ use serde_json::{json, Value};
 const SUPPORTED_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const LATEST_VERSION: &str = "2025-06-18";
 
+const WRITE_TOOLS: &[&str] = &["log_event", "identify_user", "set_insight", "increment_insight"];
+const READ_TOOLS: &[&str] = &[
+    "search_events",
+    "event_stats",
+    "event_timeseries",
+    "top_breakdown",
+    "funnel",
+    "user_journey",
+    "list_channels",
+    "list_insights",
+    "get_usage",
+];
+
+/// Whether the token's scope allows this tool.
+fn scope_allows_tool(name: &str, scope: pg::TokenScope) -> bool {
+    (WRITE_TOOLS.contains(&name) && scope.can_ingest()) || (READ_TOOLS.contains(&name) && scope.can_read())
+}
+
+/// Clear error when a token calls a known tool outside its scope.
+fn scope_error(name: &str, scope: pg::TokenScope) -> Option<String> {
+    if WRITE_TOOLS.contains(&name) && !scope.can_ingest() {
+        Some(format!("`{name}` is a write tool; this token's scope is '{scope}'. Use an ingest or full token."))
+    } else if READ_TOOLS.contains(&name) && !scope.can_read() {
+        Some(format!("`{name}` is a read tool; this token's scope is '{scope}'. Use a read or full token."))
+    } else {
+        None
+    }
+}
+
 const INSTRUCTIONS: &str = "Raterlog is real-time event tracking for products (LogSnag-compatible). \
 This connection is scoped to ONE project by its API token. Use log_event to record something that \
 just happened (signup, payment, deploy, error, agent task finished) — channels are created on first use; \
@@ -28,10 +59,10 @@ to a user_id, and set_insight/increment_insight for live KPI tiles. To answer qu
 happened, use search_events, event_stats, event_timeseries, top_breakdown, funnel and user_journey. \
 Ranges are 24h, 7d, 30d or 90d.";
 
-fn tools() -> Value {
+fn tools(scope: pg::TokenScope) -> Value {
     let range = json!({ "type": "string", "enum": ["24h", "7d", "30d", "90d"], "description": "Time window (default 7d)." });
     let ro = json!({ "readOnlyHint": true, "openWorldHint": false });
-    json!([
+    let all = json!([
         {
             "name": "log_event",
             "title": "Log event",
@@ -164,7 +195,16 @@ fn tools() -> Value {
             "inputSchema": { "type": "object", "properties": {} },
             "annotations": ro
         }
-    ])
+    ]);
+    match all {
+        Value::Array(tools) => Value::Array(
+            tools
+                .into_iter()
+                .filter(|t| scope_allows_tool(t["name"].as_str().unwrap_or(""), scope))
+                .collect(),
+        ),
+        _ => all,
+    }
 }
 
 fn range_start(args: &Value) -> chrono::DateTime<Utc> {
@@ -194,7 +234,10 @@ async fn channel_id_by_name(state: &web::Data<AppState>, company_id: &str, name:
     }
 }
 
-async fn call_tool(state: &web::Data<AppState>, company_id: &str, name: &str, args: &Value) -> Result<Value, String> {
+async fn call_tool(state: &web::Data<AppState>, company_id: &str, scope: pg::TokenScope, name: &str, args: &Value) -> Result<Value, String> {
+    if let Some(e) = scope_error(name, scope) {
+        return Err(e);
+    }
     match name {
         "log_event" => {
             let channel = resolve_channel(state, company_id, req_str(args, "channel")?, str_arg(args, "icon")).await?;
@@ -334,7 +377,7 @@ fn rpc_error(id: &Value, code: i64, message: &str) -> Value {
 }
 
 /// Handle one JSON-RPC message. `None` for notifications (no response).
-async fn handle(state: &web::Data<AppState>, company: &pg::Company, msg: &Value) -> Option<Value> {
+async fn handle(state: &web::Data<AppState>, company: &pg::Company, scope: pg::TokenScope, msg: &Value) -> Option<Value> {
     let id = msg.get("id")?.clone(); // notifications have no id
     let method = msg["method"].as_str().unwrap_or("");
     let params = &msg["params"];
@@ -353,11 +396,11 @@ async fn handle(state: &web::Data<AppState>, company: &pg::Company, msg: &Value)
             )
         }
         "ping" => rpc_result(&id, json!({})),
-        "tools/list" => rpc_result(&id, json!({ "tools": tools() })),
+        "tools/list" => rpc_result(&id, json!({ "tools": tools(scope) })),
         "tools/call" => {
             let name = params["name"].as_str().unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
-            match call_tool(state, &company.id, name, &args).await {
+            match call_tool(state, &company.id, scope, name, &args).await {
                 Ok(v) => rpc_result(
                     &id,
                     json!({
@@ -386,9 +429,9 @@ pub async fn post(req: HttpRequest, body: web::Bytes, state: web::Data<AppState>
     let Some(token) = api_token_from_request(&req) else {
         return unauthorized("Authorization: Bearer <Raterlog API token> is required. Create one in Settings → API tokens.");
     };
-    let company = match pg::token_company(&state.client, &token).await {
-        Ok(Some(cid)) => match pg::company_by_id(&state.client, &cid).await {
-            Ok(Some(c)) => c,
+    let (company, scope) = match pg::token_company(&state.client, &token).await {
+        Ok(Some((cid, scope))) => match pg::company_by_id(&state.client, &cid).await {
+            Ok(Some(c)) => (c, scope),
             _ => return unauthorized("invalid API token"),
         },
         Ok(None) => return unauthorized("invalid API token"),
@@ -401,13 +444,13 @@ pub async fn post(req: HttpRequest, body: web::Bytes, state: web::Data<AppState>
     let out = if let Some(batch) = msg.as_array() {
         let mut responses = vec![];
         for m in batch {
-            if let Some(r) = handle(&state, &company, m).await {
+            if let Some(r) = handle(&state, &company, scope, m).await {
                 responses.push(r);
             }
         }
         if responses.is_empty() { None } else { Some(Value::Array(responses)) }
     } else {
-        handle(&state, &company, &msg).await
+        handle(&state, &company, scope, &msg).await
     };
 
     match out {

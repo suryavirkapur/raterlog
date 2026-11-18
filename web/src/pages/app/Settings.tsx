@@ -29,6 +29,7 @@ import {
   type Plan,
   type PlanId,
   type Token,
+  type TokenScope,
   type Usage,
 } from "@/lib/api";
 import { useProject, useSession } from "@/lib/context";
@@ -151,6 +152,7 @@ function TokensTab({
   const [revealed, setRevealed] = useState<ReadonlySet<number>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   const [tokenName, setTokenName] = useState("");
+  const [tokenScope, setTokenScope] = useState<TokenScope>("ingest");
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<Token | null>(null);
   const [toDelete, setToDelete] = useState<Token | null>(null);
@@ -168,7 +170,7 @@ function TokensTab({
     if (!tokenName.trim()) return;
     setCreating(true);
     try {
-      const t = await projects.createToken(projectId, tokenName.trim());
+      const t = await projects.createToken(projectId, tokenName.trim(), tokenScope);
       setCreated(t);
       void reload();
     } catch (e) {
@@ -205,6 +207,7 @@ function TokensTab({
           onClick={() => {
             setCreated(null);
             setTokenName("");
+            setTokenScope("ingest");
             setCreateOpen(true);
           }}
         />
@@ -219,6 +222,7 @@ function TokensTab({
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Scope</th>
                 <th>Token</th>
                 <th style={{ width: 40 }} />
               </tr>
@@ -227,6 +231,11 @@ function TokensTab({
               {detail.tokens.map((t) => (
                 <tr key={t.id}>
                   <td style={{ fontWeight: 500 }}>{t.name}</td>
+                  <td>
+                    <Tag minimal intent={t.scope === "full" ? "primary" : "none"}>
+                      {t.scope}
+                    </Tag>
+                  </td>
                   <td>
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                       <code className="rl-code">{revealed.has(t.id) ? t.token : "••••••••••••••••"}</code>
@@ -285,6 +294,20 @@ function TokensTab({
             >
               <FormGroup label="Token name" labelFor="token-name" helperText="e.g. production, staging, jane's laptop">
                 <InputGroup id="token-name" autoFocus value={tokenName} onChange={(e) => setTokenName(e.target.value)} />
+              </FormGroup>
+              <FormGroup
+                label="Scope"
+                helperText="ingest can only send data · read can only query it (feed, MCP read tools) · full does both"
+              >
+                <SegmentedControl
+                  value={tokenScope}
+                  onValueChange={(v) => setTokenScope(v as TokenScope)}
+                  options={[
+                    { label: "Ingest", value: "ingest" },
+                    { label: "Read", value: "read" },
+                    { label: "Full", value: "full" },
+                  ]}
+                />
               </FormGroup>
             </form>
           )}

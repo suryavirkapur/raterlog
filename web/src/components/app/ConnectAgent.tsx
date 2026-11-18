@@ -17,7 +17,9 @@ export function ConnectAgent({ token, projectName }: { token?: string; projectNa
       </div>
       <p style={{ margin: 0 }}>
         Let Claude Code, Cursor, Codex or any MCP client log events and answer questions about{" "}
-        <strong>{projectName}</strong>. Server: <code>{url}</code>
+        <strong>{projectName}</strong>. Server: <code>{url}</code> — use a <code>read</code> or{" "}
+        <code>full</code> token for the read tools (search, stats, funnels), <code>ingest</code> or{" "}
+        <code>full</code> for the write tools.
       </p>
       {!token && (
         <Callout intent="warning" icon="key">

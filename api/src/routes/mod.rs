@@ -55,8 +55,12 @@ pub async fn require_channel_read(
 ) -> Result<(), HttpResponse> {
     if let Some(token) = api_token_from_request(req) {
         return match pg::verify_token_for_channel(&state.client, &token, channel_id).await {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(error_json(StatusCode::UNAUTHORIZED, "invalid api token")),
+            Ok(Some(scope)) if scope.can_read() => Ok(()),
+            Ok(Some(scope)) => Err(error_json(
+                StatusCode::FORBIDDEN,
+                &format!("token scope '{scope}' cannot read events; use a read or full token"),
+            )),
+            Ok(None) => Err(error_json(StatusCode::UNAUTHORIZED, "invalid api token")),
             Err(e) => Err(error_json(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 &format!("token check failed: {e}"),
@@ -75,6 +79,9 @@ pub async fn require_channel_read(
     }
 }
 
+/// Resolve the project for a Bearer token that must be able to *ingest* —
+/// every caller is a write endpoint (`/v1/*`, legacy `/api/logs`). A
+/// read-only token gets 403 so the caller can tell auth failure from scope.
 pub async fn company_id_from_api_token(
     req: &HttpRequest,
     state: &Data<AppState>,
@@ -86,7 +93,11 @@ pub async fn company_id_from_api_token(
         ));
     };
     match pg::token_company(&state.client, &token).await {
-        Ok(Some(company_id)) => Ok(company_id),
+        Ok(Some((company_id, scope))) if scope.can_ingest() => Ok(company_id),
+        Ok(Some((_, scope))) => Err(error_json(
+            StatusCode::FORBIDDEN,
+            &format!("token scope '{scope}' cannot ingest; use an ingest or full token"),
+        )),
         Ok(None) => Err(error_json(StatusCode::UNAUTHORIZED, "invalid api token")),
         Err(e) => Err(error_json(
             StatusCode::INTERNAL_SERVER_ERROR,
