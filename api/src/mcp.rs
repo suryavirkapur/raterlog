@@ -11,6 +11,7 @@ use crate::billing;
 use crate::ch::{EventFilter, PublicEvent};
 use crate::pg;
 use crate::routes::log::{ingest_event, resolve_channel, value_to_tags, NewEvent};
+use crate::routes::{retention_cutoff, retention_since};
 use crate::state::AppState;
 use crate::util::{api_token_from_request, generate_id};
 use actix_web::{http::header, web, HttpRequest, HttpResponse};
@@ -257,18 +258,20 @@ async fn call_tool(state: &web::Data<AppState>, company_id: &str, name: &str, ar
                 tag: str_arg(args, "tag").and_then(|t| t.split_once(':')).map(|(k, v)| (k.trim().to_string(), v.trim().to_string())),
                 q: str_arg(args, "query").map(str::to_string),
                 limit: args["limit"].as_u64().unwrap_or(25).clamp(1, 200) as u32,
+                since: Some(retention_since(state, company_id).await),
                 ..Default::default()
             };
             let rows = state.ch.list(company_id, &f).await?;
             Ok(json!({ "events": rows.into_iter().map(PublicEvent::from).collect::<Vec<_>>() }))
         }
-        "event_stats" => state.ch.summary(company_id, range_start(args)).await,
+        "event_stats" => state.ch.summary(company_id, range_start(args).max(retention_cutoff(state, company_id).await)).await,
         "event_timeseries" => {
             let channel = channel_id_by_name(state, company_id, str_arg(args, "channel")).await?;
             let hourly = args["range"].as_str() == Some("24h");
+            let from = range_start(args).max(retention_cutoff(state, company_id).await);
             let pts = state
                 .ch
-                .timeseries(company_id, range_start(args), hourly, channel.as_deref(), str_arg(args, "event"))
+                .timeseries(company_id, from, hourly, channel.as_deref(), str_arg(args, "event"))
                 .await?;
             Ok(json!({ "interval": if hourly { "hour" } else { "day" }, "points": pts }))
         }
@@ -276,7 +279,13 @@ async fn call_tool(state: &web::Data<AppState>, company_id: &str, name: &str, ar
             let by = str_arg(args, "by").unwrap_or("event");
             let rows = state
                 .ch
-                .breakdown(company_id, range_start(args), by, None, args["limit"].as_u64().unwrap_or(10).clamp(1, 100) as u32)
+                .breakdown(
+                    company_id,
+                    range_start(args).max(retention_cutoff(state, company_id).await),
+                    by,
+                    None,
+                    args["limit"].as_u64().unwrap_or(10).clamp(1, 100) as u32,
+                )
                 .await?;
             Ok(json!({ "by": by, "rows": rows }))
         }
@@ -292,7 +301,10 @@ async fn call_tool(state: &web::Data<AppState>, company_id: &str, name: &str, ar
                 return Err("a funnel needs 2 to 8 steps".into());
             }
             let window = args["window_hours"].as_u64().unwrap_or(168).clamp(1, 2160) * 3600;
-            let counts = state.ch.funnel(company_id, range_start(args), &steps, window).await?;
+            let counts = state
+                .ch
+                .funnel(company_id, range_start(args).max(retention_cutoff(state, company_id).await), &steps, window)
+                .await?;
             let first = counts.first().copied().unwrap_or(0).max(1) as f64;
             Ok(json!({ "steps": steps.iter().zip(&counts).map(|(s, c)| json!({
                 "event": s, "users": c, "conversion_from_first": (*c as f64 / first * 1000.0).round() / 10.0
@@ -304,6 +316,7 @@ async fn call_tool(state: &web::Data<AppState>, company_id: &str, name: &str, ar
             let f = EventFilter {
                 user_id: Some(user_id.to_string()),
                 limit: args["limit"].as_u64().unwrap_or(100).clamp(1, 500) as u32,
+                since: Some(retention_since(state, company_id).await),
                 ..Default::default()
             };
             let rows = state.ch.list(company_id, &f).await?;

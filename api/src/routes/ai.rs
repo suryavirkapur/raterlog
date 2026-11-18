@@ -19,7 +19,12 @@ async fn channel_logs(state: &web::Data<AppState>, channel_id: &str, limit: u32)
         .await
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "channel not found".to_string())?;
-    let f = crate::ch::EventFilter { channel_id: Some(channel_id.to_string()), limit, ..Default::default() };
+    let f = crate::ch::EventFilter {
+        channel_id: Some(channel_id.to_string()),
+        limit,
+        since: Some(super::retention_since(state, &channel.company_id).await),
+        ..Default::default()
+    };
     let rows = state.ch.list(&channel.company_id, &f).await?;
     Ok(rows
         .into_iter()

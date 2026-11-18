@@ -1,0 +1,43 @@
+# Optional storage tiering demo: hot events on the clickhouse volume, parts
+# older than CLICKHOUSE_HOT_DAYS moved to MinIO (S3) by TTL.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tiered.yml up --build
+#
+# Swap MinIO for real S3 by editing CLICKHOUSE_S3_* below (see
+# deploy/clickhouse/storage.xml).
+services:
+  app:
+    environment:
+      CLICKHOUSE_STORAGE_POLICY: tiered
+      CLICKHOUSE_HOT_DAYS: "30"
+
+  clickhouse:
+    environment:
+      CLICKHOUSE_S3_ENDPOINT: http://minio:9000/raterlog-events/data/
+      CLICKHOUSE_S3_ACCESS_KEY_ID: raterlog
+      CLICKHOUSE_S3_SECRET_ACCESS_KEY: raterlog123
+    volumes:
+      - chdata:/var/lib/clickhouse
+      - ./deploy/clickhouse/storage.xml:/etc/clickhouse-server/config.d/storage.xml:ro
+    depends_on:
+      minio-init: { condition: service_completed_successfully }
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: raterlog
+      MINIO_ROOT_PASSWORD: raterlog123
+    ports: ["9001:9001"]
+    volumes: [miniodata:/data]
+
+  # One-shot bucket creation; clickhouse (and the app) wait for it.
+  minio-init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    entrypoint: >
+      sh -c "until mc alias set local http://minio:9000 raterlog raterlog123; do sleep 1; done
+      && mc mb --ignore-existing local/raterlog-events"
+    depends_on: [minio]
+
+volumes:
+  miniodata:

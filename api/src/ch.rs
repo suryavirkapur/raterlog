@@ -16,6 +16,10 @@ pub struct ClickHouse {
     db: String,
     user: Option<String>,
     password: Option<String>,
+    /// Optional storage policy (e.g. `tiered`) for the events table.
+    storage_policy: Option<String>,
+    /// Days on the hot volume before TTL moves parts to `cold`.
+    hot_days: u32,
 }
 
 /// One ingested event, as stored and as returned to the dashboard.
@@ -164,6 +168,21 @@ impl ClickHouse {
         let mut clean = parsed.clone();
         let _ = clean.set_username("");
         let _ = clean.set_password(None);
+        // The policy name lands verbatim in DDL, so keep it identifier-safe.
+        let storage_policy = std::env::var("CLICKHOUSE_STORAGE_POLICY")
+            .ok()
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+        if let Some(p) = &storage_policy {
+            if !p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                return Err("CLICKHOUSE_STORAGE_POLICY may only contain letters, digits and '_'".into());
+            }
+        }
+        let hot_days = std::env::var("CLICKHOUSE_HOT_DAYS")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(30u32)
+            .max(1);
         Ok(ClickHouse {
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
@@ -173,6 +192,8 @@ impl ClickHouse {
             db: db.to_string(),
             user,
             password,
+            storage_policy,
+            hot_days,
         })
     }
 
@@ -216,8 +237,16 @@ impl ClickHouse {
     pub async fn ensure_schema(&self) -> Result<(), String> {
         self.exec(&format!("CREATE DATABASE IF NOT EXISTS `{}`", self.db), &vec![], None, false)
             .await?;
+        let (tier_ttl, settings) = match &self.storage_policy {
+            Some(policy) => (
+                format!(", toDateTime(ts) + INTERVAL {} DAY TO VOLUME 'cold'", self.hot_days),
+                format!(" SETTINGS storage_policy = '{policy}'"),
+            ),
+            None => (String::new(), String::new()),
+        };
         self.exec(
-            r#"CREATE TABLE IF NOT EXISTS events (
+            &format!(
+                r#"CREATE TABLE IF NOT EXISTS events (
                 company_id  LowCardinality(String),
                 channel_id  LowCardinality(String),
                 channel     LowCardinality(String),
@@ -233,12 +262,44 @@ impl ClickHouse {
             ) ENGINE = MergeTree
             PARTITION BY toYYYYMM(ts)
             ORDER BY (company_id, id)
-            TTL toDateTime(ts) + INTERVAL 3 YEAR"#,
+            TTL toDateTime(ts) + INTERVAL 3 YEAR{tier_ttl}{settings}"#
+            ),
             &vec![],
             None,
             true,
         )
         .await?;
+        // CREATE ... IF NOT EXISTS leaves an existing table untouched, so
+        // apply the policy/TTL again to catch old tables. These are
+        // idempotent; a server that can't honour them gets a warning, not a
+        // crash (tiering stays optional).
+        if let Some(policy) = &self.storage_policy {
+            if let Err(e) = self
+                .exec(
+                    &format!("ALTER TABLE events MODIFY SETTING storage_policy = '{policy}'"),
+                    &vec![],
+                    None,
+                    true,
+                )
+                .await
+            {
+                tracing::warn!("could not set storage_policy '{policy}' on events (is it defined server-side?): {e}");
+            }
+            if let Err(e) = self
+                .exec(
+                    &format!(
+                        "ALTER TABLE events MODIFY TTL toDateTime(ts) + INTERVAL 3 YEAR, toDateTime(ts) + INTERVAL {} DAY TO VOLUME 'cold'",
+                        self.hot_days
+                    ),
+                    &vec![],
+                    None,
+                    true,
+                )
+                .await
+            {
+                tracing::warn!("could not set the tiered TTL on events (does the policy have a 'cold' volume?): {e}");
+            }
+        }
         Ok(())
     }
 

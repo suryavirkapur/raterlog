@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 
-use super::{company_id_from_api_token, require_channel_read, require_company_member};
+use super::{company_id_from_api_token, require_channel_read, require_company_member, retention_since};
 
 #[derive(Debug, Deserialize)]
 struct LegacyLogInput {
@@ -208,10 +208,12 @@ async fn channel_events(
         Ok(None) => return error_json(StatusCode::NOT_FOUND, "channel not found"),
         Err(e) => return error_json(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
     };
+    let floor = retention_since(&state, &channel.company_id).await;
+    let since = q.get("since").and_then(|v| v.parse::<u64>().ok());
     let f = EventFilter {
         channel_id: Some(channel_id),
         limit: q.get("limit").and_then(|v| v.parse().ok()).unwrap_or(100),
-        since: q.get("since").and_then(|v| v.parse().ok()),
+        since: Some(since.map_or(floor, |s| s.max(floor))),
         before: q.get("before").and_then(|v| v.parse().ok()),
         ..Default::default()
     };
@@ -326,6 +328,8 @@ pub async fn company_events(req: HttpRequest, path: web::Path<String>, state: we
         return resp;
     }
     let nonempty = |k: &str| q.get(k).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let floor = retention_since(&state, &company_id).await;
+    let since = nonempty("since").and_then(|v| v.parse::<u64>().ok());
     let f = EventFilter {
         channel_id: nonempty("channel"),
         event: nonempty("event"),
@@ -333,7 +337,7 @@ pub async fn company_events(req: HttpRequest, path: web::Path<String>, state: we
         tag: nonempty("tag").and_then(|t| t.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))),
         q: nonempty("q"),
         before: nonempty("before").and_then(|v| v.parse().ok()),
-        since: nonempty("since").and_then(|v| v.parse().ok()),
+        since: Some(since.map_or(floor, |s| s.max(floor))),
         limit: nonempty("limit").and_then(|v| v.parse().ok()).unwrap_or(50),
     };
     match state.ch.list(&company_id, &f).await {
