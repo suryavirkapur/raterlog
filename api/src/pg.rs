@@ -162,6 +162,33 @@ pub struct DashboardWidget {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Monitor {
+    pub id: String,
+    #[serde(rename = "companyID")]
+    pub company_id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub channel: Option<String>,
+    pub event: Option<String>,
+    /// Tag filter as "key:value".
+    pub tag: Option<String>,
+    /// count_above | count_below | absent
+    pub condition: String,
+    pub threshold: i64,
+    pub window_minutes: i32,
+    pub cooldown_minutes: i32,
+    pub notify_emails: Vec<String>,
+    pub webhook_urls: Vec<String>,
+    pub notify_resolved: bool,
+    /// ok | alerting
+    pub state: String,
+    pub last_checked_at: Option<DateTime<Utc>>,
+    pub last_triggered_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Clone)]
 pub struct CompanyDetail {
     pub company: Company,
     pub channels: Vec<Channel>,
@@ -260,6 +287,27 @@ pub async fn ensure_schema(client: &Client) -> Result<(), tokio_postgres::Error>
                 title TEXT NOT NULL,
                 config JSONB NOT NULL DEFAULT '{}'::jsonb
             );
+            CREATE TABLE IF NOT EXISTS "Monitor" (
+                id TEXT PRIMARY KEY,
+                "companyID" TEXT NOT NULL REFERENCES "Company"(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                channel TEXT,
+                event TEXT,
+                tag TEXT,
+                condition TEXT NOT NULL,
+                threshold BIGINT NOT NULL DEFAULT 0,
+                window_minutes INTEGER NOT NULL DEFAULT 60,
+                cooldown_minutes INTEGER NOT NULL DEFAULT 60,
+                notify_emails TEXT[] NOT NULL DEFAULT '{}',
+                webhook_urls TEXT[] NOT NULL DEFAULT '{}',
+                notify_resolved BOOLEAN NOT NULL DEFAULT TRUE,
+                state TEXT NOT NULL DEFAULT 'ok',
+                "lastCheckedAt" TIMESTAMPTZ,
+                "lastTriggeredAt" TIMESTAMPTZ,
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            CREATE INDEX IF NOT EXISTS monitor_company_idx ON "Monitor"("companyID");
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "billingCustomerId" TEXT;
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "subscriptionId" TEXT;
@@ -1298,4 +1346,196 @@ pub async fn delete_widget(
             &[&widget_id, &dashboard_id],
         )
         .await
+}
+
+const MONITOR_COLS: &str = r#"id, "companyID", name, enabled, channel, event, tag, condition,
+    threshold, window_minutes, cooldown_minutes, notify_emails, webhook_urls,
+    notify_resolved, state, "lastCheckedAt", "lastTriggeredAt", "createdAt""#;
+
+fn monitor_from_row(row: &tokio_postgres::Row) -> Monitor {
+    Monitor {
+        id: row.get(0),
+        company_id: row.get(1),
+        name: row.get(2),
+        enabled: row.get(3),
+        channel: row.get(4),
+        event: row.get(5),
+        tag: row.get(6),
+        condition: row.get(7),
+        threshold: row.get(8),
+        window_minutes: row.get(9),
+        cooldown_minutes: row.get(10),
+        notify_emails: row.get(11),
+        webhook_urls: row.get(12),
+        notify_resolved: row.get(13),
+        state: row.get(14),
+        last_checked_at: row.get(15),
+        last_triggered_at: row.get(16),
+        created_at: row.get(17),
+    }
+}
+
+pub async fn monitors_for_company(
+    client: &Client,
+    company_id: &str,
+) -> Result<Vec<Monitor>, tokio_postgres::Error> {
+    let rows = client
+        .query(
+            &format!(r#"SELECT {MONITOR_COLS} FROM "Monitor" WHERE "companyID" = $1 ORDER BY name"#),
+            &[&company_id],
+        )
+        .await?;
+    Ok(rows.iter().map(monitor_from_row).collect())
+}
+
+pub async fn monitor_by_id(
+    client: &Client,
+    company_id: &str,
+    monitor_id: &str,
+) -> Result<Option<Monitor>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            &format!(r#"SELECT {MONITOR_COLS} FROM "Monitor" WHERE "companyID" = $1 AND id = $2"#),
+            &[&company_id, &monitor_id],
+        )
+        .await?;
+    Ok(row.as_ref().map(monitor_from_row))
+}
+
+/// Everything the evaluator needs in one place. `state`/`last_*` are managed
+/// by the evaluator, not by callers.
+#[allow(clippy::too_many_arguments)]
+pub async fn create_monitor(
+    client: &Client,
+    id: &str,
+    company_id: &str,
+    name: &str,
+    enabled: bool,
+    channel: Option<&str>,
+    event: Option<&str>,
+    tag: Option<&str>,
+    condition: &str,
+    threshold: i64,
+    window_minutes: i32,
+    cooldown_minutes: i32,
+    notify_emails: &[String],
+    webhook_urls: &[String],
+    notify_resolved: bool,
+) -> Result<Monitor, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            &format!(
+                r#"INSERT INTO "Monitor" (id, "companyID", name, enabled, channel, event, tag,
+                    condition, threshold, window_minutes, cooldown_minutes, notify_emails,
+                    webhook_urls, notify_resolved)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                   RETURNING {MONITOR_COLS}"#
+            ),
+            &[
+                &id, &company_id, &name, &enabled, &channel, &event, &tag, &condition,
+                &threshold, &window_minutes, &cooldown_minutes, &notify_emails, &webhook_urls,
+                &notify_resolved,
+            ],
+        )
+        .await?;
+    Ok(monitor_from_row(&row))
+}
+
+/// Full update (PATCH semantics are resolved by the caller). Runtime state is
+/// preserved; the evaluator recomputes it on the next tick.
+#[allow(clippy::too_many_arguments)]
+pub async fn update_monitor(
+    client: &Client,
+    company_id: &str,
+    monitor_id: &str,
+    name: &str,
+    enabled: bool,
+    channel: Option<&str>,
+    event: Option<&str>,
+    tag: Option<&str>,
+    condition: &str,
+    threshold: i64,
+    window_minutes: i32,
+    cooldown_minutes: i32,
+    notify_emails: &[String],
+    webhook_urls: &[String],
+    notify_resolved: bool,
+) -> Result<Option<Monitor>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            &format!(
+                r#"UPDATE "Monitor" SET name = $3, enabled = $4, channel = $5, event = $6,
+                    tag = $7, condition = $8, threshold = $9, window_minutes = $10,
+                    cooldown_minutes = $11, notify_emails = $12, webhook_urls = $13,
+                    notify_resolved = $14
+                   WHERE "companyID" = $1 AND id = $2
+                   RETURNING {MONITOR_COLS}"#
+            ),
+            &[
+                &company_id, &monitor_id, &name, &enabled, &channel, &event, &tag, &condition,
+                &threshold, &window_minutes, &cooldown_minutes, &notify_emails, &webhook_urls,
+                &notify_resolved,
+            ],
+        )
+        .await?;
+    Ok(row.as_ref().map(monitor_from_row))
+}
+
+pub async fn delete_monitor(
+    client: &Client,
+    company_id: &str,
+    monitor_id: &str,
+) -> Result<u64, tokio_postgres::Error> {
+    client
+        .execute(
+            r#"DELETE FROM "Monitor" WHERE "companyID" = $1 AND id = $2"#,
+            &[&company_id, &monitor_id],
+        )
+        .await
+}
+
+/// All monitors the evaluator should run this tick.
+pub async fn enabled_monitors(client: &Client) -> Result<Vec<Monitor>, tokio_postgres::Error> {
+    let rows = client
+        .query(
+            &format!(r#"SELECT {MONITOR_COLS} FROM "Monitor" WHERE enabled"#),
+            &[],
+        )
+        .await?;
+    Ok(rows.iter().map(monitor_from_row).collect())
+}
+
+/// Record one evaluation. `triggered` bumps "lastTriggeredAt" to `at`.
+pub async fn monitor_check_done(
+    client: &Client,
+    monitor_id: &str,
+    state: &str,
+    at: DateTime<Utc>,
+    triggered: bool,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            r#"UPDATE "Monitor" SET state = $2, "lastCheckedAt" = $3,
+                 "lastTriggeredAt" = CASE WHEN $4 THEN $3 ELSE "lastTriggeredAt" END
+               WHERE id = $1"#,
+            &[&monitor_id, &state, &at, &triggered],
+        )
+        .await?;
+    Ok(())
+}
+
+/// Session-level advisory lock so only one replica evaluates monitors per tick.
+/// The lock is released automatically if the connection drops.
+pub async fn try_advisory_lock(client: &Client, key: i64) -> Result<bool, tokio_postgres::Error> {
+    let row = client
+        .query_one("SELECT pg_try_advisory_lock($1)", &[&key])
+        .await?;
+    Ok(row.get(0))
+}
+
+pub async fn advisory_unlock(client: &Client, key: i64) -> Result<(), tokio_postgres::Error> {
+    client
+        .query_one("SELECT pg_advisory_unlock($1)", &[&key])
+        .await?;
+    Ok(())
 }

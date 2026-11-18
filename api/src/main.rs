@@ -13,6 +13,7 @@ mod billing;
 mod ch;
 mod mail;
 mod mcp;
+mod monitor;
 mod pg;
 mod routes;
 mod selftrack;
@@ -99,6 +100,7 @@ async fn main() -> std::io::Result<()> {
             .desc(format!("raterlog v{}", env!("CARGO_PKG_VERSION")))
             .tag("version", env!("CARGO_PKG_VERSION")),
     );
+    monitor::spawn(data.clone());
 
     HttpServer::new(move || {
         // Same-origin dashboard needs no CORS; this is for browser-side
@@ -167,6 +169,11 @@ async fn main() -> std::io::Result<()> {
             .service(routes::dashboards::update_widget)
             .service(routes::dashboards::delete_widget)
             .service(routes::dashboards::save_layout)
+            .service(routes::monitors::list_monitors)
+            .service(routes::monitors::create_monitor)
+            .service(routes::monitors::update_monitor)
+            .service(routes::monitors::delete_monitor)
+            .service(routes::monitors::test_monitor)
             .service(routes::billing::plans)
             .service(routes::billing::checkout)
             .service(routes::billing::portal)

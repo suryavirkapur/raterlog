@@ -24,6 +24,7 @@ import Analytics from "@/pages/app/Analytics";
 import Insights from "@/pages/app/Insights";
 import Dashboards from "@/pages/app/Dashboards";
 import DashboardView from "@/pages/app/DashboardView";
+import Monitors from "@/pages/app/Monitors";
 import Users from "@/pages/app/Users";
 import UserJourney from "@/pages/app/UserJourney";
 import Settings from "@/pages/app/Settings";
@@ -73,6 +74,7 @@ const analytics = createRoute({ getParentRoute: () => project, path: "analytics"
 const insights = createRoute({ getParentRoute: () => project, path: "insights", component: Insights });
 const dashboardsRoute = createRoute({ getParentRoute: () => project, path: "dashboards", component: Dashboards });
 const dashboardView = createRoute({ getParentRoute: () => project, path: "dashboards/$dashboardId", component: DashboardView });
+const monitors = createRoute({ getParentRoute: () => project, path: "monitors", component: Monitors });
 const usersRoute = createRoute({ getParentRoute: () => project, path: "users", component: Users });
 const userJourney = createRoute({ getParentRoute: () => project, path: "users/$userId", component: UserJourney });
 const settings = createRoute({
@@ -97,7 +99,7 @@ const routeTree = rootRoute.addChildren([
   dashRedirect,
   app.addChildren([
     appHome,
-    project.addChildren([feed, setup, channel, analytics, insights, dashboardsRoute, dashboardView, usersRoute, userJourney, settings]),
+    project.addChildren([feed, setup, channel, analytics, insights, monitors, dashboardsRoute, dashboardView, usersRoute, userJourney, settings]),
   ]),
 ]);
 

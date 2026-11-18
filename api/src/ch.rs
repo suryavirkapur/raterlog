@@ -558,6 +558,48 @@ impl ClickHouse {
         Ok(rows.first().map(|r| r.n).unwrap_or(0))
     }
 
+    /// Events since `from`, with the optional filters monitors support.
+    /// `channel` matches the channel *name* (what `resolve_channel` creates).
+    pub async fn count_matching(
+        &self,
+        company_id: &str,
+        from: DateTime<Utc>,
+        channel: Option<&str>,
+        event: Option<&str>,
+        tag: Option<(&str, &str)>,
+    ) -> Result<u64, String> {
+        let mut params: Params = vec![
+            ("c".into(), company_id.into()),
+            ("from".into(), id_floor(from).to_string()),
+        ];
+        let mut wh = vec!["company_id = {c:String}".to_string(), "id >= {from:UInt64}".to_string()];
+        if let Some(v) = channel {
+            wh.push("channel = {ch:String}".into());
+            params.push(("ch".into(), v.into()));
+        }
+        if let Some(v) = event {
+            wh.push("event = {ev:String}".into());
+            params.push(("ev".into(), v.into()));
+        }
+        if let Some((k, v)) = tag {
+            wh.push("tags[{tk:String}] = {tv:String}".into());
+            params.push(("tk".into(), k.into()));
+            params.push(("tv".into(), v.into()));
+        }
+        #[derive(Deserialize)]
+        struct Row {
+            #[serde(with = "u64_string_num")]
+            n: u64,
+        }
+        let rows: Vec<Row> = self
+            .rows(
+                &format!("SELECT count() AS n FROM events WHERE {}", wh.join(" AND ")),
+                &params,
+            )
+            .await?;
+        Ok(rows.first().map(|r| r.n).unwrap_or(0))
+    }
+
     /// Drop events older than `days` for one company (plan retention).
     pub async fn purge_older_than(&self, company_id: &str, days: u32) -> Result<(), String> {
         let cutoff = Utc::now() - chrono::Duration::days(days as i64);
