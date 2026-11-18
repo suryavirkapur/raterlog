@@ -15,6 +15,7 @@ mod mail;
 mod mcp;
 mod pg;
 mod routes;
+mod selftrack;
 mod state;
 mod util;
 mod spa;
@@ -87,9 +88,16 @@ async fn main() -> std::io::Result<()> {
         smtp_host,
         smtp_port,
         openai_api_key,
+        selftrack: selftrack::SelfTrack::from_env(),
     });
 
     spawn_retention_job(data.clone());
+    selftrack::track(
+        &data,
+        selftrack::Track::new("ops", "🚀", "Server started")
+            .desc(format!("raterlog v{}", env!("CARGO_PKG_VERSION")))
+            .tag("version", env!("CARGO_PKG_VERSION")),
+    );
 
     HttpServer::new(move || {
         // Same-origin dashboard needs no CORS; this is for browser-side

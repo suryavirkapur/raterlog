@@ -12,6 +12,7 @@ pub struct AppState {
     pub smtp_host: String,
     pub smtp_port: u16,
     pub openai_api_key: Option<String>,
+    pub selftrack: crate::selftrack::SelfTrack,
 }
 
 impl AppState {

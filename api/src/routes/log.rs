@@ -125,6 +125,28 @@ pub async fn ingest_event(
         .await
         .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err))?;
     state.quota.bump(company_id);
+    if used == 0 && state.selftrack.enabled() {
+        let st = state.clone();
+        let cid = company_id.to_string();
+        let channel_name = channel.name.clone();
+        tokio::spawn(async move {
+            if crate::selftrack::project_id(&st).await.as_deref() == Some(cid.as_str()) {
+                return;
+            }
+            let name = match pg::company_by_id(&st.client, &cid).await {
+                Ok(Some(c)) => c.name,
+                _ => cid.clone(),
+            };
+            crate::selftrack::track_with(
+                &st,
+                crate::selftrack::Track::new("activation", "📡", "First event received")
+                    .desc(format!("{name} → #{channel_name}"))
+                    .tag("project", cid)
+                    .notify(),
+                crate::selftrack::Extras { increment: vec![("Activated projects", "📡")], identify: None },
+            );
+        });
+    }
     Ok(ev.into())
 }
 

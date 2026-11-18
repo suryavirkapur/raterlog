@@ -1,5 +1,6 @@
 use crate::mail::send_invite_email;
 use crate::pg;
+use crate::selftrack::{self, Track};
 use crate::state::AppState;
 use crate::util::{error_json, generate_id, json_created, json_ok, valid_email};
 use actix_web::{delete, get, http::StatusCode, patch, post, web, HttpRequest, HttpResponse};
@@ -53,7 +54,17 @@ pub async fn create_company(
         return error_json(StatusCode::BAD_REQUEST, "company name is required");
     }
     match pg::create_company(&state.client, &generate_id(15), name, &user.id).await {
-        Ok(company) => json_created(company),
+        Ok(company) => {
+            selftrack::track_with(
+                &state,
+                Track::new("projects", "📦", "Project created")
+                    .desc(format!("{} · {}", company.name, user.email))
+                    .user(&user.id)
+                    .tag("project", company.id.clone()),
+                selftrack::Extras { increment: vec![("Projects", "📦")], identify: None },
+            );
+            json_created(company)
+        }
         Err(e) => error_json(
             StatusCode::INTERNAL_SERVER_ERROR,
             &format!("failed to create company: {e}"),
@@ -164,9 +175,10 @@ pub async fn create_invite(
     state: web::Data<AppState>,
 ) -> HttpResponse {
     let company_id = path.into_inner();
-    if let Err(resp) = require_company_member(&req, &state, &company_id).await {
-        return resp;
-    }
+    let inviter = match require_company_member(&req, &state, &company_id).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
     let email = body.email.trim().to_lowercase();
     if !valid_email(&email) {
         return error_json(StatusCode::BAD_REQUEST, "valid email is required");
@@ -203,6 +215,13 @@ pub async fn create_invite(
             eprintln!("failed to send invite email: {e}");
         }
     }
+    selftrack::track(
+        &state,
+        Track::new("growth", "📨", "Teammate invited")
+            .desc(format!("{} invited {}", inviter.email, email))
+            .user(&inviter.id)
+            .tag("project", company_id.clone()),
+    );
     json_created(invite)
 }
 
@@ -234,15 +253,25 @@ pub async fn create_token(
     state: web::Data<AppState>,
 ) -> HttpResponse {
     let company_id = path.into_inner();
-    if let Err(resp) = require_company_member(&req, &state, &company_id).await {
-        return resp;
-    }
+    let user = match require_company_member(&req, &state, &company_id).await {
+        Ok(u) => u,
+        Err(resp) => return resp,
+    };
     let name = body.name.trim();
     if name.is_empty() {
         return error_json(StatusCode::BAD_REQUEST, "token name is required");
     }
     match pg::create_token(&state.client, &company_id, name, &generate_id(24)).await {
-        Ok(token) => json_created(token),
+        Ok(token) => {
+            selftrack::track(
+                &state,
+                Track::new("activation", "🔑", "API token created")
+                    .desc(user.email.clone())
+                    .user(&user.id)
+                    .tag("project", company_id.clone()),
+            );
+            json_created(token)
+        }
         Err(e) => error_json(
             StatusCode::INTERNAL_SERVER_ERROR,
             &format!("failed to create token: {e}"),
@@ -293,7 +322,16 @@ pub async fn accept_invite(
         Err(resp) => return resp,
     };
     match pg::accept_invite(&state.client, &path.into_inner(), &user.id, &user.email).await {
-        Ok(Ok(invite)) => json_ok(invite),
+        Ok(Ok(invite)) => {
+            selftrack::track(
+                &state,
+                Track::new("growth", "🤝", "Invite accepted")
+                    .desc(user.email.clone())
+                    .user(&user.id)
+                    .tag("project", invite.company_id.clone()),
+            );
+            json_ok(invite)
+        }
         Ok(Err(message)) => error_json(StatusCode::BAD_REQUEST, &message),
         Err(e) => error_json(
             StatusCode::INTERNAL_SERVER_ERROR,

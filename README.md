@@ -71,6 +71,16 @@ cd web && npm install && npm run dev             # :3000, proxies /api and /v1 t
 See `api/.env.example`. Required: `DATABASE_URL`, `CLICKHOUSE_URL`, `APP_URL`.
 Optional: `SMTP_HOST`/`SMTP_PORT` (invite emails; invites can also be shared as links), `OPENAI_API_KEY` (AI copilot), `DODO_*` (billing; endpoints return 503 when unset).
 
+### Raterlog on Raterlog
+
+Set `RATERLOG_SELF_EMAIL` to your account's email and the server tracks itself:
+it creates a `raterlog` project for that account (on the top plan, never
+quota-blocked) and logs `#signups`, `#projects`, `#activation` (API token
+created, first event received), `#growth` (invites), `#billing` (checkout,
+subscription changes, failed payments) and `#ops` (server started), plus
+Users / Projects / Activated projects insight tiles and identified users.
+It runs in-process and fire-and-forget (`api/src/selftrack.rs`).
+
 `www.` hosts are redirected (301) to the apex domain by the server.
 
 ## Plans

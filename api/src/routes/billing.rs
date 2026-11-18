@@ -2,6 +2,7 @@
 
 use crate::billing;
 use crate::pg;
+use crate::selftrack::{self, Track};
 use crate::state::AppState;
 use crate::util::{error_json, json_ok};
 use actix_web::{get, http::StatusCode, post, web, HttpRequest, HttpResponse};
@@ -49,7 +50,18 @@ pub async fn checkout(req: HttpRequest, path: web::Path<String>, body: web::Json
         company_id
     );
     match dodo.checkout(product, customer, &return_url, &company_id).await {
-        Ok(url) => json_ok(serde_json::json!({ "url": url })),
+        Ok(url) => {
+            selftrack::track(
+                &state,
+                Track::new("billing", "🛒", "Checkout started")
+                    .desc(format!("{} · {} ({})", user.email, body.plan, interval))
+                    .user(&user.id)
+                    .tag("plan", body.plan.clone())
+                    .tag("interval", interval)
+                    .tag("project", company_id.clone()),
+            );
+            json_ok(serde_json::json!({ "url": url }))
+        }
         Err(e) => {
             tracing::error!("checkout failed: {e}");
             error_json(StatusCode::BAD_GATEWAY, "could not start checkout, please try again")
@@ -117,6 +129,25 @@ pub async fn webhook(req: HttpRequest, body: web::Bytes, state: web::Data<AppSta
         },
         _ => Ok(0),
     };
+    if result.is_ok() {
+        let plan = dodo.plan_for_product(product_id).unwrap_or_default();
+        let t = match kind {
+            "subscription.active" => Some(Track::new("billing", "💰", "Subscription started").notify()),
+            "subscription.plan_changed" => Some(Track::new("billing", "🔁", "Plan changed").notify()),
+            "subscription.renewed" => Some(Track::new("billing", "🔄", "Subscription renewed")),
+            "subscription.cancelled" => Some(Track::new("billing", "👋", "Subscription canceled").notify()),
+            "subscription.expired" => Some(Track::new("billing", "⌛", "Subscription expired")),
+            "subscription.failed" => Some(Track::new("billing", "🚨", "Payment failed").notify()),
+            _ => None,
+        };
+        if let Some(t) = t {
+            let t = t
+                .desc(format!("{} plan", if plan.is_empty() { "unknown" } else { plan.as_str() }))
+                .tag("plan", plan.clone())
+                .tag("project", company_id.unwrap_or("").to_string());
+            selftrack::track(&state, t);
+        }
+    }
     match result {
         Ok(_) => json_ok(serde_json::json!({ "received": true })),
         // 500 makes Dodo retry later.

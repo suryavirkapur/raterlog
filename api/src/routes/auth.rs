@@ -1,4 +1,5 @@
 use crate::pg::{self, User};
+use crate::selftrack::{self, Track};
 use crate::state::AppState;
 use crate::util::{
     error_json, generate_id, json_ok, session_cookie, session_id_from_request, valid_email,
@@ -93,9 +94,27 @@ pub async fn signup(body: web::Json<SignupInput>, state: web::Data<AppState>) ->
             return error_json(StatusCode::CONFLICT, &format!("could not create user: {e}"))
         }
     };
-    if !body.invite_token.is_empty() {
-        let _ = pg::accept_invite(&state.client, &body.invite_token, &user.id, &user.email).await;
-    }
+    selftrack::on_signup(&state, &user.email).await;
+    let via_invite = !body.invite_token.is_empty()
+        && matches!(
+            pg::accept_invite(&state.client, &body.invite_token, &user.id, &user.email).await,
+            Ok(Ok(_))
+        );
+    selftrack::track_with(
+        &state,
+        Track::new("signups", "🙋", "User signed up")
+            .desc(format!("{} · {}", user.name, user.email))
+            .user(&user.id)
+            .tag("via", if via_invite { "invite" } else { "direct" })
+            .notify(),
+        selftrack::Extras {
+            increment: vec![("Users", "👥")],
+            identify: Some((
+                user.id.clone(),
+                serde_json::json!({ "name": user.name, "email": user.email, "signed_up_at": chrono::Utc::now().to_rfc3339() }),
+            )),
+        },
+    );
     create_session_response(&state, user).await
 }
 
@@ -117,7 +136,15 @@ pub async fn signin(body: web::Json<SigninInput>, state: web::Data<AppState>) ->
         return error_json(StatusCode::UNAUTHORIZED, "incorrect email or password");
     }
     if !body.invite_token.is_empty() {
-        let _ = pg::accept_invite(&state.client, &body.invite_token, &user.id, &user.email).await;
+        if let Ok(Ok(invite)) = pg::accept_invite(&state.client, &body.invite_token, &user.id, &user.email).await {
+            selftrack::track(
+                &state,
+                Track::new("growth", "🤝", "Invite accepted")
+                    .desc(user.email.clone())
+                    .user(&user.id)
+                    .tag("project", invite.company_id),
+            );
+        }
     }
     create_session_response(&state, user).await
 }
