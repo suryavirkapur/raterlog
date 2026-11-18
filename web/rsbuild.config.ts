@@ -13,6 +13,17 @@ export default defineConfig({
   html: {
     title: "Raterlog — Real-time event tracking",
     favicon: "./public/icon.png",
+    tags: [
+      { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" } },
+      { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" } },
+      {
+        tag: "link",
+        attrs: {
+          rel: "stylesheet",
+          href: "https://fonts.googleapis.com/css2?family=Geist:wght@300..600&family=Geist+Mono:wght@400;500&display=swap",
+        },
+      },
+    ],
     meta: {
       description:
         "Track the events that matter in your product. Real-time feed, push notifications, charts, funnels and user journeys.",
