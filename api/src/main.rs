@@ -23,7 +23,7 @@ use state::AppState;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
 
     let postgres_uri = env::var("DATABASE_URL")
