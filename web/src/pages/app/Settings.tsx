@@ -23,6 +23,7 @@ import {
 import {
   ApiError,
   billing,
+  integrations,
   projects,
   type CompanyDetail,
   type Invite,
@@ -30,6 +31,7 @@ import {
   type PlanId,
   type Token,
   type Usage,
+  type WebhookSource,
 } from "@/lib/api";
 import { useProject, useSession } from "@/lib/context";
 import { useAsync, useLocalState } from "@/lib/hooks";
@@ -39,7 +41,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { RelativeTime } from "@/components/app/RelativeTime";
 import { copyText, errMsg, fmtNum } from "@/components/app/util";
 
-type TabId = "general" | "tokens" | "members" | "billing";
+type TabId = "general" | "tokens" | "integrations" | "members" | "billing";
 
 export default function Settings() {
   const { projectId } = useParams({ strict: false }) as { projectId: string };
@@ -66,6 +68,11 @@ export default function Settings() {
       >
         <Tab id="general" title="General" panel={<GeneralTab projectId={projectId} detail={detail} reload={reload} />} />
         <Tab id="tokens" title="API tokens" panel={<TokensTab projectId={projectId} detail={detail} reload={reload} />} />
+        <Tab
+          id="integrations"
+          title="Integrations"
+          panel={<IntegrationsTab projectId={projectId} detail={detail} />}
+        />
         <Tab
           id="members"
           title="Members"
@@ -327,6 +334,208 @@ function TokensTab({
         </p>
       </Alert>
     </Card>
+  );
+}
+
+/* ── Integrations ────────────────────────────── */
+
+const WEBHOOK_SOURCES: {
+  id: WebhookSource;
+  name: string;
+  channel: string;
+  secretLabel: string;
+  steps: string[];
+}[] = [
+  {
+    id: "stripe",
+    name: "Stripe",
+    channel: "payments",
+    secretLabel: "Signing secret (whsec_…)",
+    steps: [
+      "Stripe Dashboard → Developers → Webhooks → Add endpoint",
+      "Paste the webhook URL below",
+      "Pick events (subscriptions, invoices, refunds…) and save",
+      "Copy the endpoint's signing secret into the field below",
+    ],
+  },
+  {
+    id: "github",
+    name: "GitHub",
+    channel: "github",
+    secretLabel: "Webhook secret",
+    steps: [
+      "Repo or org → Settings → Webhooks → Add webhook",
+      "Paste the webhook URL, set Content type to application/json",
+      "Optionally set a secret and save it below too",
+    ],
+  },
+  {
+    id: "vercel",
+    name: "Vercel",
+    channel: "deploys",
+    secretLabel: "Webhook secret",
+    steps: [
+      "Project → Settings → Webhooks → Create",
+      "Paste the webhook URL and pick deployment events",
+      "Copy the generated secret into the field below",
+    ],
+  },
+  {
+    id: "dodo",
+    name: "Dodo Payments",
+    channel: "payments",
+    secretLabel: "Signing secret (whsec_…)",
+    steps: [
+      "Dodo Dashboard → Developer → Webhooks → Add endpoint",
+      "Paste the webhook URL and select payment/subscription events",
+      "Copy the signing secret into the field below",
+    ],
+  },
+  {
+    id: "generic",
+    name: "Generic JSON",
+    channel: "webhooks",
+    secretLabel: "Secret (X-Hub-Signature-256)",
+    steps: [
+      "Point any service that can POST JSON at the webhook URL",
+      "Body may set event, description, channel, icon, tags, user_id",
+      "Optional: send X-Hub-Signature-256 (sha256=<hex HMAC>) with a secret",
+    ],
+  },
+];
+
+function IntegrationCard({
+  projectId,
+  source,
+  webhookUrl,
+  configured,
+  reload,
+}: {
+  projectId: string;
+  source: (typeof WEBHOOK_SOURCES)[number];
+  webhookUrl: string;
+  configured: boolean;
+  reload: () => Promise<void>;
+}) {
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    if (!secret.trim()) return;
+    setBusy(true);
+    try {
+      await integrations.setSecret(projectId, source.id, secret.trim());
+      setSecret("");
+      await toast({ message: `${source.name} secret saved — signatures are now verified`, intent: "success", icon: "tick" });
+      await reload();
+    } catch (e) {
+      toastError(e, "Couldn't save secret");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try {
+      await integrations.clearSecret(projectId, source.id);
+      await toast({ message: `${source.name} secret removed`, intent: "success", icon: "tick" });
+      await reload();
+    } catch (e) {
+      toastError(e, "Couldn't remove secret");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card compact>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <H5 style={{ margin: 0 }}>{source.name}</H5>
+        <div style={{ display: "flex", gap: 6 }}>
+          <Tag minimal icon="feed">
+            {source.channel}
+          </Tag>
+          {configured ? (
+            <Tag minimal intent="success" icon="lock">
+              signed
+            </Tag>
+          ) : (
+            <Tag minimal icon="unlock">
+              unsigned
+            </Tag>
+          )}
+        </div>
+      </div>
+      <ol className="rl-muted" style={{ fontSize: 12.5, margin: "0 0 10px", paddingLeft: 18 }}>
+        {source.steps.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ol>
+      <FormGroup label="Webhook URL" style={{ marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <code className="rl-code" style={{ flex: 1, overflowWrap: "anywhere", fontSize: 12 }}>
+            {webhookUrl}
+          </code>
+          <Button small minimal icon="duplicate" text="Copy" onClick={() => copyText(webhookUrl, "Webhook URL copied")} />
+        </div>
+      </FormGroup>
+      <FormGroup label={source.secretLabel} helperText="Optional — when set, deliveries are signature-verified." style={{ marginBottom: 0 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <InputGroup
+            small
+            fill
+            type="password"
+            placeholder={configured ? "•••••••• (replace)" : "Paste the provider's secret"}
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+          />
+          <Button
+            small
+            intent="primary"
+            text={configured ? "Replace" : "Save"}
+            icon="floppy-disk"
+            loading={busy}
+            disabled={!secret.trim()}
+            onClick={() => void save()}
+          />
+          {configured && (
+            <Button small minimal intent="danger" icon="trash" text="Clear" loading={busy} onClick={() => void clear()} />
+          )}
+        </div>
+      </FormGroup>
+    </Card>
+  );
+}
+
+function IntegrationsTab({ projectId, detail }: { projectId: string; detail: CompanyDetail }) {
+  const integ = useAsync(() => integrations.list(projectId), [projectId]);
+  const configured = new Set(integ.data?.sources ?? []);
+  const token = detail.tokens[0]?.token;
+
+  return (
+    <div className="rl-stack" style={{ marginTop: 12 }}>
+      <Callout compact icon="satellite" style={{ marginBottom: 0 }}>
+        Point a provider's webhook at its URL below and deliveries become Raterlog events — no code
+        needed. The token in the URL identifies this project.
+      </Callout>
+      {!token && (
+        <Callout intent="warning" icon="key">
+          This project has no API token yet — create one in <strong>API tokens</strong> first; it
+          becomes part of every webhook URL.
+        </Callout>
+      )}
+      {WEBHOOK_SOURCES.map((s) => (
+        <IntegrationCard
+          key={s.id}
+          projectId={projectId}
+          source={s}
+          webhookUrl={`${location.origin}/v1/webhooks/${s.id}/${token ?? "YOUR_TOKEN"}`}
+          configured={configured.has(s.id)}
+          reload={integ.reload}
+        />
+      ))}
+    </div>
   );
 }
 

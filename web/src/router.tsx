@@ -75,8 +75,8 @@ const settings = createRoute({
   getParentRoute: () => project,
   path: "settings",
   validateSearch: (s: Record<string, unknown>) => ({
-    tab: (["general", "tokens", "members", "billing"] as const).includes(s.tab as any)
-      ? (s.tab as "general" | "tokens" | "members" | "billing")
+    tab: (["general", "tokens", "integrations", "members", "billing"] as const).includes(s.tab as any)
+      ? (s.tab as "general" | "tokens" | "integrations" | "members" | "billing")
       : "general",
   }),
   component: Settings,

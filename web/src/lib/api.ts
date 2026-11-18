@@ -33,6 +33,8 @@ const post = <T>(path: string, body: unknown = {}) =>
   api<T>(path, { method: "POST", body: JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) =>
   api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+const put = <T>(path: string, body: unknown) =>
+  api<T>(path, { method: "PUT", body: JSON.stringify(body) });
 const del = <T>(path: string) => api<T>(path, { method: "DELETE" });
 
 function qs(params: Record<string, string | number | undefined | null>) {
@@ -219,6 +221,18 @@ export const billing = {
   checkout: (projectId: string, plan: PlanId, interval: "month" | "year") =>
     post<{ url: string }>(`/api/companies/${projectId}/billing/checkout`, { plan, interval }),
   portal: (projectId: string) => post<{ url: string }>(`/api/companies/${projectId}/billing/portal`),
+};
+
+export type WebhookSource = "stripe" | "github" | "vercel" | "dodo" | "generic";
+
+export const integrations = {
+  /** Sources that have a webhook signing secret configured (secrets are never returned). */
+  list: (projectId: string) =>
+    api<{ sources: WebhookSource[] }>(`/api/companies/${projectId}/integrations`),
+  setSecret: (projectId: string, source: WebhookSource, secret: string) =>
+    put<{ ok: boolean }>(`/api/companies/${projectId}/integrations/${source}`, { secret }),
+  clearSecret: (projectId: string, source: WebhookSource) =>
+    del<{ ok: boolean }>(`/api/companies/${projectId}/integrations/${source}`),
 };
 
 export const ai = {

@@ -18,6 +18,7 @@ mod routes;
 mod state;
 mod util;
 mod spa;
+mod webhooks;
 
 use state::AppState;
 
@@ -155,6 +156,10 @@ async fn main() -> std::io::Result<()> {
             .service(routes::billing::webhook)
             .service(routes::ai::summarize)
             .service(routes::ai::query)
+            .service(routes::webhooks::inbound)
+            .service(routes::webhooks::list_integrations)
+            .service(routes::webhooks::set_integration_secret)
+            .service(routes::webhooks::delete_integration_secret)
             .route("/mcp", web::post().to(mcp::post))
             .route("/mcp", web::get().to(mcp::get))
             .default_service(web::to(spa::spa))

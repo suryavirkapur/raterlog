@@ -29,6 +29,20 @@ curl -X POST https://raterlog.com/v1/log \
 `project` is the project name (or id). Channels are created on first use.
 Legacy: `POST /api/logs` / `POST /log` with `channel_id`, `event_name`, `event_payload`, `metadata`.
 
+## Inbound webhooks
+
+Turn third-party webhooks into events with no code — the project token lives in the URL because providers can't set auth headers:
+
+```
+POST /v1/webhooks/{source}/{token}
+```
+
+Sources: `stripe` → `payments` (checkouts, subscriptions, invoices, refunds — amount/currency/customer in tags, notify on money events) · `github` → `github` (push, pull_request, release, issues, star) · `vercel` → `deploys` (deployment created/succeeded/error) · `dodo` → `payments` (payment.succeeded/failed, subscription.active/cancelled) · `generic` → `webhooks` (JSON body with optional `event`, `description`, `channel`, `icon`, `tags`, `user_id`). Unknown event types are still logged, never rejected.
+
+Signature verification is optional per project: set a secret in **Settings → Integrations** (stored per source in Postgres) and Stripe-Signature, X-Hub-Signature-256, x-vercel-signature, or Standard Webhooks signatures are enforced. With no secret, deliveries are accepted.
+
+Session endpoints: `GET`/`PUT`/`DELETE /api/companies/{id}/integrations[/{source}]`.
+
 ## MCP server (AI agents)
 
 `https://raterlog.com/mcp`: Streamable HTTP, stateless, `Authorization: Bearer <project token>`.

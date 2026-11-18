@@ -159,6 +159,13 @@ pub async fn ensure_schema(client: &Client) -> Result<(), tokio_postgres::Error>
                 "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 UNIQUE ("companyID", "userId")
             );
+            CREATE TABLE IF NOT EXISTS "IntegrationSecret" (
+                "companyID" TEXT NOT NULL REFERENCES "Company"(id) ON DELETE CASCADE,
+                source TEXT NOT NULL,
+                secret TEXT NOT NULL,
+                "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                PRIMARY KEY ("companyID", source)
+            );
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "billingCustomerId" TEXT;
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "subscriptionId" TEXT;
@@ -902,6 +909,66 @@ pub async fn identified_user(
         )
         .await?;
     Ok(row.as_ref().map(identified_from_row))
+}
+
+/// Webhook signing secret for one (company, source), if configured.
+pub async fn integration_secret(
+    client: &Client,
+    company_id: &str,
+    source: &str,
+) -> Result<Option<String>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            r#"SELECT secret FROM "IntegrationSecret" WHERE "companyID" = $1 AND source = $2"#,
+            &[&company_id, &source],
+        )
+        .await?;
+    Ok(row.map(|r| r.get(0)))
+}
+
+/// Sources with a configured secret; the secrets themselves are never read out.
+pub async fn integration_sources(
+    client: &Client,
+    company_id: &str,
+) -> Result<Vec<String>, tokio_postgres::Error> {
+    let rows = client
+        .query(
+            r#"SELECT source FROM "IntegrationSecret" WHERE "companyID" = $1 ORDER BY source"#,
+            &[&company_id],
+        )
+        .await?;
+    Ok(rows.iter().map(|r| r.get(0)).collect())
+}
+
+pub async fn set_integration_secret(
+    client: &Client,
+    company_id: &str,
+    source: &str,
+    secret: &str,
+) -> Result<(), tokio_postgres::Error> {
+    client
+        .execute(
+            r#"INSERT INTO "IntegrationSecret" ("companyID", source, secret, "updatedAt")
+               VALUES ($1, $2, $3, NOW())
+               ON CONFLICT ("companyID", source)
+               DO UPDATE SET secret = EXCLUDED.secret, "updatedAt" = NOW()"#,
+            &[&company_id, &source, &secret],
+        )
+        .await?;
+    Ok(())
+}
+
+pub async fn delete_integration_secret(
+    client: &Client,
+    company_id: &str,
+    source: &str,
+) -> Result<u64, tokio_postgres::Error> {
+    client
+        .execute(
+            r#"DELETE FROM "IntegrationSecret" WHERE "companyID" = $1 AND source = $2"#,
+            &[&company_id, &source],
+        )
+        .await
 }
 
 pub async fn seat_count(client: &Client, company_id: &str) -> Result<i64, tokio_postgres::Error> {

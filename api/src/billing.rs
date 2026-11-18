@@ -227,7 +227,7 @@ impl Dodo {
     }
 }
 
-fn verify_signature(secret: &str, id: &str, ts: &str, sig_header: &str, body: &[u8]) -> bool {
+pub(crate) fn verify_signature(secret: &str, id: &str, ts: &str, sig_header: &str, body: &[u8]) -> bool {
     {
         let raw = secret.strip_prefix("whsec_").unwrap_or(secret);
         let Ok(key) = Base64::decode_vec(raw) else { return false };
@@ -269,6 +269,6 @@ mod tests {
     }
 }
 
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }

@@ -99,6 +99,7 @@ export default function Docs() {
             ["#log", "POST /v1/log"],
             ["#identify", "POST /v1/identify"],
             ["#insight", "Insights"],
+            ["#webhooks", "Inbound webhooks"],
             ["#errors", "Errors"],
             ["/docs/agents", "AI agents & MCP →"],
           ].map(([href, label]) => (
@@ -216,6 +217,58 @@ export default function Docs() {
               value: { $inc: 1 },
               icon: "🙋",
             })}
+          />
+        </section>
+
+        <section id="webhooks">
+          <h2>Inbound webhooks</h2>
+          <p>
+            Turn third-party webhooks into Raterlog events with no code: point the provider at{" "}
+            <code>POST /v1/webhooks/{"{source}"}/{"{token}"}</code> and each delivery is mapped to an
+            event. The project token lives in the URL because providers can't set auth headers —
+            find ready-made URLs in <strong>Settings → Integrations</strong>.
+          </p>
+          <div className="rl-table-wrap">
+            <HTMLTable compact bordered style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Channel</th>
+                  <th>Events logged · signature header</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["stripe", "payments", "Checkouts, subscriptions, invoices, refunds · Stripe-Signature"],
+                  ["github", "github", "Push, pull requests, releases, issues, stars · X-Hub-Signature-256"],
+                  ["vercel", "deploys", "Deployment created/succeeded/error · x-vercel-signature"],
+                  ["dodo", "payments", "Payments and subscriptions · Standard Webhooks (whsec_…)"],
+                  ["generic", "webhooks", "Any JSON body: event, description, channel, icon, tags, user_id"],
+                ].map(([src, ch, desc]) => (
+                  <tr key={src}>
+                    <td>
+                      <code>{src}</code>
+                    </td>
+                    <td>
+                      <code>{ch}</code>
+                    </td>
+                    <td>{desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </HTMLTable>
+          </div>
+          <p>
+            Unknown event types are still logged (named after the raw type), never rejected.
+            Signature verification is optional: set the provider's secret in{" "}
+            <strong>Settings → Integrations</strong> and deliveries are verified — with no secret,
+            the webhook is accepted.
+          </p>
+          <CodeBlock
+            label="example"
+            code={`curl -X POST ${base}/v1/webhooks/generic/${TOKEN} \\
+  -H "Content-Type: application/json" \\
+  -d '{"channel":"ci","event":"Deploy finished","icon":"🚀","tags":{"env":"prod"}}'`}
           />
         </section>
 
