@@ -170,6 +170,14 @@ export function SidebarContent({
             onClick={onNavigate}
           />
           <NavItem
+            to="/app/$projectId/dashboards"
+            params={{ projectId }}
+            icon="dashboard"
+            label="Dashboards"
+            hint="g d"
+            onClick={onNavigate}
+          />
+          <NavItem
             to="/app/$projectId/insights"
             params={{ projectId }}
             icon="lightbulb"

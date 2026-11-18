@@ -149,6 +149,40 @@ export type AiSummary = {
   source: string;
 };
 
+// ── Dashboards ────────────────────────────────
+
+export type WidgetKind = "timeseries" | "breakdown" | "funnel" | "insight" | "event_count";
+
+/**
+ * A widget's saved query + layout. The query fields mirror the analytics
+ * endpoints' params; x/y/w/h place it on the 12-column dashboard grid.
+ */
+export type WidgetConfig = {
+  x?: number; // column, 0-11
+  y?: number; // row
+  w?: number; // column span, 1-12 (default 6)
+  h?: number; // row span, 1-8 (default 3)
+  channel?: string; // channel id (timeseries, breakdown)
+  event?: string; // exact event name (timeseries)
+  interval?: Interval; // timeseries
+  by?: "event" | "channel" | "user"; // breakdown
+  limit?: number; // breakdown
+  steps?: string[]; // funnel
+  window_hours?: number; // funnel
+  insight?: string; // insight title (insight)
+};
+export type Dashboard = { id: string; companyID: string; name: string; createdAt: string };
+export type DashboardSummary = { id: string; name: string; createdAt: string; widgetCount: number };
+export type DashboardWidget = {
+  id: string;
+  dashboardID: string;
+  kind: WidgetKind;
+  title: string;
+  config: WidgetConfig;
+};
+export type DashboardDetail = { dashboard: Dashboard; widgets: DashboardWidget[] };
+export type WidgetLayout = { id: string; x: number; y: number; w: number; h: number };
+
 // ───────────────────────── Endpoints ─────────────────────────
 
 export const auth = {
@@ -206,6 +240,40 @@ export const analytics = {
   ) => api<BreakdownRow[]>(`/api/companies/${projectId}/analytics/breakdown${qs(p)}`),
   funnel: (projectId: string, b: { steps: string[]; range: Range; window_hours: number }) =>
     post<FunnelStep[]>(`/api/companies/${projectId}/analytics/funnel`, b),
+};
+
+export const dashboards = {
+  list: (projectId: string) => api<DashboardSummary[]>(`/api/companies/${projectId}/dashboards`),
+  create: (projectId: string, name: string) =>
+    post<Dashboard>(`/api/companies/${projectId}/dashboards`, { name }),
+  get: (projectId: string, dashboardId: string) =>
+    api<DashboardDetail>(`/api/companies/${projectId}/dashboards/${dashboardId}`),
+  rename: (projectId: string, dashboardId: string, name: string) =>
+    patch<Dashboard>(`/api/companies/${projectId}/dashboards/${dashboardId}`, { name }),
+  remove: (projectId: string, dashboardId: string) =>
+    del<unknown>(`/api/companies/${projectId}/dashboards/${dashboardId}`),
+
+  addWidget: (
+    projectId: string,
+    dashboardId: string,
+    w: { kind: WidgetKind; title: string; config?: WidgetConfig },
+  ) => post<DashboardWidget>(`/api/companies/${projectId}/dashboards/${dashboardId}/widgets`, w),
+  updateWidget: (
+    projectId: string,
+    dashboardId: string,
+    widgetId: string,
+    p: { title?: string; config?: WidgetConfig },
+  ) =>
+    patch<DashboardWidget>(
+      `/api/companies/${projectId}/dashboards/${dashboardId}/widgets/${widgetId}`,
+      p,
+    ),
+  removeWidget: (projectId: string, dashboardId: string, widgetId: string) =>
+    del<unknown>(`/api/companies/${projectId}/dashboards/${dashboardId}/widgets/${widgetId}`),
+  saveLayout: (projectId: string, dashboardId: string, widgets: WidgetLayout[]) =>
+    put<DashboardWidget[]>(`/api/companies/${projectId}/dashboards/${dashboardId}/layout`, {
+      widgets,
+    }),
 };
 
 export const users = {
