@@ -11,6 +11,7 @@ pub mod companies;
 pub mod identify;
 pub mod insights;
 pub mod log;
+pub mod webhooks;
 
 pub async fn require_user(req: &HttpRequest, state: &Data<AppState>) -> Result<User, HttpResponse> {
     let Some(session_id) = session_id_from_request(req) else {
