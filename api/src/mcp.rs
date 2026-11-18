@@ -26,6 +26,7 @@ just happened (signup, payment, deploy, error, agent task finished) — channels
 set notify=true only for events a human should be pinged about. Use identify_user to attach properties \
 to a user_id, and set_insight/increment_insight for live KPI tiles. To answer questions about what \
 happened, use search_events, event_stats, event_timeseries, top_breakdown, funnel and user_journey. \
+Use get_dashboard to read a saved dashboard's widget definitions. \
 Ranges are 24h, 7d, 30d or 90d.";
 
 fn tools() -> Value {
@@ -162,6 +163,15 @@ fn tools() -> Value {
             "title": "Plan usage",
             "description": "Current plan, events used this month and limits.",
             "inputSchema": { "type": "object", "properties": {} },
+            "annotations": ro
+        },
+        {
+            "name": "get_dashboard",
+            "title": "Get dashboard",
+            "description": "Get a saved dashboard and its widget definitions (kind, title and config holding the same params as the analytics tools, plus x/y/w/h layout).",
+            "inputSchema": { "type": "object", "required": ["dashboard"], "properties": {
+                "dashboard": { "type": "string", "description": "Dashboard name or id." }
+            }},
             "annotations": ro
         }
     ])
@@ -320,6 +330,33 @@ async fn call_tool(state: &web::Data<AppState>, company_id: &str, name: &str, ar
                 "plan": plan.id, "events_used": used, "events_limit": plan.events_limit,
                 "period_start": start.to_rfc3339(), "period_end": end.to_rfc3339(), "retention_days": plan.retention_days
             }))
+        }
+        "get_dashboard" => {
+            let want = req_str(args, "dashboard")?;
+            let dashboard = match pg::dashboard_by_id(&state.client, company_id, want)
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                Some(d) => Some(d),
+                None => pg::dashboard_by_name(&state.client, company_id, want)
+                    .await
+                    .map_err(|e| e.to_string())?,
+            };
+            let Some(dashboard) = dashboard else {
+                let names = pg::dashboards_for_company(&state.client, company_id)
+                    .await
+                    .map(|list| list.into_iter().map(|d| d.name).collect::<Vec<_>>())
+                    .unwrap_or_default();
+                return Err(if names.is_empty() {
+                    format!("no dashboard '{want}' (this project has no dashboards)")
+                } else {
+                    format!("no dashboard '{want}'. Available: {}", names.join(", "))
+                });
+            };
+            let widgets = pg::widgets_for_dashboard(&state.client, &dashboard.id)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(json!({ "dashboard": dashboard, "widgets": widgets }))
         }
         other => Err(format!("unknown tool: {other}")),
     }

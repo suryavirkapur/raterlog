@@ -8,6 +8,7 @@ pub mod analytics;
 pub mod billing;
 pub mod auth;
 pub mod companies;
+pub mod dashboards;
 pub mod identify;
 pub mod insights;
 pub mod log;

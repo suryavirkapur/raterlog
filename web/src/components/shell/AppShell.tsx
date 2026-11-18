@@ -31,6 +31,7 @@ const PAGE_LABELS: Record<string, string> = {
   setup: "Setup guide",
   analytics: "Analytics",
   insights: "Insights",
+  dashboards: "Dashboards",
   users: "Users",
   settings: "Settings",
 };
@@ -103,6 +104,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
         if (e.key === "f") navigate({ to: "/app/$projectId", params: { projectId }, search: { q: undefined, event: undefined, tag: undefined } });
         else if (e.key === "a")
           navigate({ to: "/app/$projectId/analytics", params: { projectId } });
+        else if (e.key === "d")
+          navigate({ to: "/app/$projectId/dashboards", params: { projectId } });
         else if (e.key === "u") navigate({ to: "/app/$projectId/users", params: { projectId } });
         else if (e.key === "s")
           navigate({
@@ -162,6 +165,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
           icon: "timeline-line-chart",
           hint: "g a",
           run: () => navigate({ to: "/app/$projectId/analytics", params: { projectId } }),
+        },
+        {
+          id: "p-dashboards",
+          label: "Dashboards",
+          icon: "dashboard",
+          hint: "g d",
+          run: () => navigate({ to: "/app/$projectId/dashboards", params: { projectId } }),
         },
         {
           id: "p-insights",

@@ -14,7 +14,6 @@ import {
   Tag,
 } from "@blueprintjs/core";
 import { MultiSelect } from "@blueprintjs/select";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { analytics, type BreakdownRow, type FunnelStep, type Range } from "@/lib/api";
 import { useProject } from "@/lib/context";
 import { useAsync, useLocalState } from "@/lib/hooks";
@@ -23,7 +22,10 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { StatTile } from "@/components/app/StatTile";
 import { RangeSelect } from "@/components/app/RangeSelect";
 import { ChartCard } from "@/components/app/ChartCard";
-import { CHART, CHART_TOOLTIP_STYLE } from "@/components/app/chartTheme";
+import { BreakdownBar } from "@/components/app/BreakdownBar";
+import { EventsChart } from "@/components/app/EventsChart";
+import { FunnelBars } from "@/components/app/FunnelBars";
+import { SaveToDashboard } from "@/components/app/SaveToDashboard";
 import { errMsg, fmtNum } from "@/components/app/util";
 
 type SavedFunnel = { name: string; steps: string[]; window_hours: number };
@@ -76,19 +78,26 @@ export default function Analytics() {
 
   const eventOptions = useMemo(() => (byEvent.data ?? []).map((r) => r.key), [byEvent.data]);
 
-  const tickFmt = (t: string) => {
-    const d = new Date(t);
-    return interval === "hour"
-      ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
-      : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  };
-
   return (
     <div className="rl-page rl-page-data">
       <PageHeader
         title="Analytics"
         subtitle={`${detail.company.name} — last ${range}`}
-        actions={<RangeSelect value={range} onChange={setRange} />}
+        actions={
+          <>
+            <SaveToDashboard
+              projectId={projectId}
+              kind="timeseries"
+              defaultTitle={eventName ? `${eventName} over time` : "Events over time"}
+              config={{
+                channel: channel || undefined,
+                event: eventName || undefined,
+                interval,
+              }}
+            />
+            <RangeSelect value={range} onChange={setRange} />
+          </>
+        }
       />
 
       <div className="rl-stats">
@@ -137,40 +146,7 @@ export default function Analytics() {
           </div>
         }
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={series.data ?? []} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
-            <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" vertical={false} />
-            <XAxis
-              dataKey="t"
-              tickFormatter={tickFmt}
-              tick={{ fontSize: 11, fill: "currentColor" }}
-              stroke={CHART.tick}
-              minTickGap={40}
-              tickLine={false}
-            />
-            <YAxis
-              allowDecimals={false}
-              tick={{ fontSize: 11, fill: "currentColor" }}
-              stroke={CHART.tick}
-              tickLine={false}
-              axisLine={false}
-              width={46}
-            />
-            <Tooltip
-              contentStyle={CHART_TOOLTIP_STYLE}
-              labelFormatter={(v) => new Date(v as string).toLocaleString()}
-              formatter={(v) => [fmtNum(Number(v)), "events"]}
-            />
-            <Area
-              type="monotone"
-              dataKey="count"
-              stroke={CHART.primary}
-              strokeWidth={2}
-              fill={CHART.primarySoft}
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        <EventsChart data={series.data ?? []} hourly={interval === "hour"} />
       </ChartCard>
 
       <div className="rl-analytics-lower">
@@ -235,23 +211,6 @@ function BreakdownCard({
   );
 }
 
-function BreakdownBar({ row, max, onPick }: { row: BreakdownRow; max: number; onPick?: (key: string) => void }) {
-  return (
-    <div
-      className="rl-bar-row"
-      style={onPick ? { cursor: "pointer" } : undefined}
-      onClick={onPick ? () => onPick(row.key) : undefined}
-      title={onPick ? `Filter chart to "${row.key}"` : row.key}
-    >
-      <div className="rl-bar-key">{row.key}</div>
-      <div className="rl-bar-track">
-        <div className="rl-bar-fill" style={{ width: `${Math.max((row.count / Math.max(max, 1)) * 100, 2)}%` }} />
-      </div>
-      <div className="rl-bar-count">{fmtNum(row.count)}</div>
-    </div>
-  );
-}
-
 function FunnelBuilder({
   projectId,
   range,
@@ -289,8 +248,6 @@ function FunnelBuilder({
     setWindowHours(f.window_hours);
     void run(f.steps, f.window_hours);
   };
-
-  const first = result?.[0]?.count ?? 0;
 
   return (
     <Card compact>
@@ -384,28 +341,7 @@ function FunnelBuilder({
       {running && <div className={Classes.SKELETON} style={{ height: 140, marginTop: 14, borderRadius: 6 }} />}
       {!running && result && (
         <div style={{ marginTop: 16 }}>
-          {result.map((s, i) => {
-            const pct = first > 0 ? (s.count / first) * 100 : 0;
-            const prev = i > 0 ? result[i - 1]!.count : null;
-            const drop = prev != null && prev > 0 ? ((prev - s.count) / prev) * 100 : 0;
-            return (
-              <div key={i} className="rl-funnel-step">
-                {i > 0 && (
-                  <div className="rl-funnel-meta">
-                    <span>↓ {drop.toFixed(1)}% dropped off</span>
-                  </div>
-                )}
-                <div className="rl-funnel-bar" style={{ width: `${Math.max(pct, 8)}%` }}>
-                  {s.event}
-                </div>
-                <div className="rl-funnel-meta">
-                  <span>
-                    {fmtNum(s.count)} · {pct.toFixed(1)}% of first step
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          <FunnelBars steps={result} />
         </div>
       )}
       {!running && result?.length === 0 && (

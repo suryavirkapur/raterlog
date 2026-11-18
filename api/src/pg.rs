@@ -82,6 +82,36 @@ pub struct IdentifiedUser {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Dashboard {
+    pub id: String,
+    #[serde(rename = "companyID")]
+    pub company_id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardSummary {
+    pub id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub widget_count: i64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct DashboardWidget {
+    pub id: String,
+    #[serde(rename = "dashboardID")]
+    pub dashboard_id: String,
+    pub kind: String,
+    pub title: String,
+    pub config: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Clone)]
 pub struct CompanyDetail {
     pub company: Company,
     pub channels: Vec<Channel>,
@@ -159,6 +189,19 @@ pub async fn ensure_schema(client: &Client) -> Result<(), tokio_postgres::Error>
                 "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 UNIQUE ("companyID", "userId")
             );
+            CREATE TABLE IF NOT EXISTS "Dashboard" (
+                id TEXT PRIMARY KEY,
+                "companyID" TEXT NOT NULL REFERENCES "Company"(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS "DashboardWidget" (
+                id TEXT PRIMARY KEY,
+                "dashboardID" TEXT NOT NULL REFERENCES "Dashboard"(id) ON DELETE CASCADE,
+                kind TEXT NOT NULL,
+                title TEXT NOT NULL,
+                config JSONB NOT NULL DEFAULT '{}'::jsonb
+            );
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "billingCustomerId" TEXT;
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "subscriptionId" TEXT;
@@ -167,6 +210,8 @@ pub async fn ensure_schema(client: &Client) -> Result<(), tokio_postgres::Error>
             CREATE UNIQUE INDEX IF NOT EXISTS channel_company_name_idx ON "Channel"("companyID", lower(name));
             CREATE INDEX IF NOT EXISTS session_user_idx ON "Session"("userId");
             CREATE INDEX IF NOT EXISTS token_token_idx ON "Token"(token);
+            CREATE INDEX IF NOT EXISTS dashboard_company_idx ON "Dashboard"("companyID");
+            CREATE INDEX IF NOT EXISTS dashboard_widget_idx ON "DashboardWidget"("dashboardID");
             "#,
         )
         .await
@@ -913,4 +958,220 @@ pub async fn seat_count(client: &Client, company_id: &str) -> Result<i64, tokio_
         )
         .await?;
     Ok(row.get(0))
+}
+
+fn dashboard_from_row(row: &tokio_postgres::Row) -> Dashboard {
+    Dashboard {
+        id: row.get(0),
+        company_id: row.get(1),
+        name: row.get(2),
+        created_at: row.get(3),
+    }
+}
+
+fn widget_from_row(row: &tokio_postgres::Row) -> DashboardWidget {
+    DashboardWidget {
+        id: row.get(0),
+        dashboard_id: row.get(1),
+        kind: row.get(2),
+        title: row.get(3),
+        config: row.get(4),
+    }
+}
+
+const WIDGET_COLS: &str = r#"id, "dashboardID", kind, title, config"#;
+
+/// Widgets in reading order: position comes from the JSONB config (x, y).
+const WIDGET_ORDER: &str = r#"CASE WHEN jsonb_typeof(config->'y') = 'number' THEN (config->>'y')::int ELSE 0 END,
+         CASE WHEN jsonb_typeof(config->'x') = 'number' THEN (config->>'x')::int ELSE 0 END,
+         title"#;
+
+pub async fn dashboards_for_company(
+    client: &Client,
+    company_id: &str,
+) -> Result<Vec<DashboardSummary>, tokio_postgres::Error> {
+    let rows = client
+        .query(
+            r#"SELECT d.id, d.name, d."createdAt", count(w.id) AS widgets
+               FROM "Dashboard" d
+               LEFT JOIN "DashboardWidget" w ON w."dashboardID" = d.id
+               WHERE d."companyID" = $1
+               GROUP BY d.id
+               ORDER BY d."createdAt""#,
+            &[&company_id],
+        )
+        .await?;
+    Ok(rows
+        .iter()
+        .map(|row| DashboardSummary {
+            id: row.get(0),
+            name: row.get(1),
+            created_at: row.get(2),
+            widget_count: row.get(3),
+        })
+        .collect())
+}
+
+pub async fn dashboard_by_id(
+    client: &Client,
+    company_id: &str,
+    dashboard_id: &str,
+) -> Result<Option<Dashboard>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            r#"SELECT id, "companyID", name, "createdAt" FROM "Dashboard" WHERE id = $1 AND "companyID" = $2"#,
+            &[&dashboard_id, &company_id],
+        )
+        .await?;
+    Ok(row.as_ref().map(dashboard_from_row))
+}
+
+pub async fn dashboard_by_name(
+    client: &Client,
+    company_id: &str,
+    name: &str,
+) -> Result<Option<Dashboard>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            r#"SELECT id, "companyID", name, "createdAt" FROM "Dashboard"
+               WHERE "companyID" = $1 AND lower(name) = lower($2)
+               ORDER BY "createdAt" LIMIT 1"#,
+            &[&company_id, &name],
+        )
+        .await?;
+    Ok(row.as_ref().map(dashboard_from_row))
+}
+
+pub async fn create_dashboard(
+    client: &Client,
+    id: &str,
+    company_id: &str,
+    name: &str,
+) -> Result<Dashboard, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            r#"INSERT INTO "Dashboard" (id, "companyID", name) VALUES ($1, $2, $3)
+               RETURNING id, "companyID", name, "createdAt""#,
+            &[&id, &company_id, &name],
+        )
+        .await?;
+    Ok(dashboard_from_row(&row))
+}
+
+pub async fn update_dashboard(
+    client: &Client,
+    company_id: &str,
+    dashboard_id: &str,
+    name: &str,
+) -> Result<Option<Dashboard>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            r#"UPDATE "Dashboard" SET name = $3 WHERE id = $1 AND "companyID" = $2
+               RETURNING id, "companyID", name, "createdAt""#,
+            &[&dashboard_id, &company_id, &name],
+        )
+        .await?;
+    Ok(row.as_ref().map(dashboard_from_row))
+}
+
+pub async fn delete_dashboard(
+    client: &Client,
+    company_id: &str,
+    dashboard_id: &str,
+) -> Result<u64, tokio_postgres::Error> {
+    client
+        .execute(
+            r#"DELETE FROM "Dashboard" WHERE id = $1 AND "companyID" = $2"#,
+            &[&dashboard_id, &company_id],
+        )
+        .await
+}
+
+pub async fn widgets_for_dashboard(
+    client: &Client,
+    dashboard_id: &str,
+) -> Result<Vec<DashboardWidget>, tokio_postgres::Error> {
+    let rows = client
+        .query(
+            &format!(
+                r#"SELECT {WIDGET_COLS} FROM "DashboardWidget" WHERE "dashboardID" = $1 ORDER BY {WIDGET_ORDER}"#
+            ),
+            &[&dashboard_id],
+        )
+        .await?;
+    Ok(rows.iter().map(widget_from_row).collect())
+}
+
+pub async fn create_widget(
+    client: &Client,
+    id: &str,
+    dashboard_id: &str,
+    kind: &str,
+    title: &str,
+    config: &serde_json::Value,
+) -> Result<DashboardWidget, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            &format!(
+                r#"INSERT INTO "DashboardWidget" (id, "dashboardID", kind, title, config)
+                   VALUES ($1, $2, $3, $4, $5) RETURNING {WIDGET_COLS}"#
+            ),
+            &[&id, &dashboard_id, &kind, &title, &config],
+        )
+        .await?;
+    Ok(widget_from_row(&row))
+}
+
+pub async fn update_widget(
+    client: &Client,
+    dashboard_id: &str,
+    widget_id: &str,
+    title: Option<&str>,
+    config: Option<&serde_json::Value>,
+) -> Result<Option<DashboardWidget>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            &format!(
+                r#"UPDATE "DashboardWidget"
+                   SET title = COALESCE($3, title), config = COALESCE($4, config)
+                   WHERE id = $1 AND "dashboardID" = $2
+                   RETURNING {WIDGET_COLS}"#
+            ),
+            &[&widget_id, &dashboard_id, &title, &config],
+        )
+        .await?;
+    Ok(row.as_ref().map(widget_from_row))
+}
+
+/// Merge keys (e.g. layout x/y/w/h) into a widget's JSONB config.
+pub async fn merge_widget_config(
+    client: &Client,
+    dashboard_id: &str,
+    widget_id: &str,
+    patch: &serde_json::Value,
+) -> Result<Option<DashboardWidget>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            &format!(
+                r#"UPDATE "DashboardWidget" SET config = config || $3
+                   WHERE id = $1 AND "dashboardID" = $2
+                   RETURNING {WIDGET_COLS}"#
+            ),
+            &[&widget_id, &dashboard_id, &patch],
+        )
+        .await?;
+    Ok(row.as_ref().map(widget_from_row))
+}
+
+pub async fn delete_widget(
+    client: &Client,
+    dashboard_id: &str,
+    widget_id: &str,
+) -> Result<u64, tokio_postgres::Error> {
+    client
+        .execute(
+            r#"DELETE FROM "DashboardWidget" WHERE id = $1 AND "dashboardID" = $2"#,
+            &[&widget_id, &dashboard_id],
+        )
+        .await
 }

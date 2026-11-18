@@ -38,7 +38,7 @@ claude mcp add --transport http raterlog https://raterlog.com/mcp --header "Auth
 ```
 
 Write tools: `log_event`, `identify_user`, `set_insight`, `increment_insight`.
-Read tools: `search_events`, `event_stats`, `event_timeseries`, `top_breakdown`, `funnel`, `user_journey`, `list_channels`, `list_insights`, `get_usage`.
+Read tools: `search_events`, `event_stats`, `event_timeseries`, `top_breakdown`, `funnel`, `user_journey`, `list_channels`, `list_insights`, `get_usage`, `get_dashboard`.
 Implementation: `api/src/mcp.rs`. Setup guide for every client: `/docs/agents` (and the in-app Setup guide with your token filled in); summary for LLMs at `/llms.txt`.
 
 ## Dashboard API (session cookie)
@@ -46,6 +46,9 @@ Implementation: `api/src/mcp.rs`. Setup guide for every client: `/docs/agents` (
 Auth `/api/auth/*`; projects `/api/companies[/{id}]` with channels, tokens, invites;
 feed `GET /api/companies/{id}/events?channel&event&user_id&tag=k:v&q&before&since&limit`;
 analytics `/api/companies/{id}/analytics/{timeseries,breakdown,funnel}`;
+dashboards `/api/companies/{id}/dashboards` (+ `/{did}` get/rename/delete, `/{did}/widgets` create,
+`/{did}/widgets/{wid}` update/delete, `PUT /{did}/layout` bulk x/y/w/h save) — widget configs hold
+the same params the analytics endpoints take, and the UI fetches widget data through them;
 journeys `GET /api/companies/{id}/users/{userId}`; usage `GET /api/companies/{id}/usage`;
 billing `GET /api/plans`, `POST /api/companies/{id}/billing/{checkout,portal}`, `POST /api/billing/webhook`;
 AI `POST /api/channels/{id}/ai/{summarize,query}`. Health: `GET /health`.
