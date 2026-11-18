@@ -36,7 +36,7 @@ export function StatTile({
         {icon && <Icon icon={icon} size={12} />}
         {label}
       </div>
-      <div className={`rl-stat-value ${loading ? Classes.SKELETON : ""}`}>
+      <div className={`rl-stat-value ${typeof value === "string" ? "rl-stat-value-text" : ""} ${loading ? Classes.SKELETON : ""}`}>
         {value == null ? "—" : typeof value === "number" ? fmtNum(value) : value}
       </div>
       {(sub || deltaNode) && (

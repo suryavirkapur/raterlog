@@ -5,6 +5,7 @@ import { users, type IdentifiedUser } from "@/lib/api";
 import { useProject } from "@/lib/context";
 import { useAsync } from "@/lib/hooks";
 import { PageHeader } from "@/components/app/PageHeader";
+import { StatTile } from "@/components/app/StatTile";
 import { RelativeTime } from "@/components/app/RelativeTime";
 import { errMsg } from "@/components/app/util";
 
@@ -47,16 +48,37 @@ export default function Users() {
     );
   }, [res.data, q]);
 
+  const stats = useMemo(() => {
+    const list = res.data ?? [];
+    const weekAgo = Date.now() - 7 * 86_400_000;
+    const recent = list.filter((u) => new Date(u.updatedAt).getTime() > weekAgo).length;
+    const latest = list.reduce<string | null>(
+      (max, u) => (max == null || u.updatedAt > max ? u.updatedAt : max),
+      null,
+    );
+    return { total: list.length, recent, latest };
+  }, [res.data]);
+
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div className="rl-page rl-page-data">
       <PageHeader title="Users" subtitle={`${detail.company.name} — identified users`} />
+
+      <div className="rl-stats">
+        <StatTile icon="people" label="Identified users" value={stats.total} loading={res.loading} />
+        <StatTile icon="updated" label="Updated last 7d" value={stats.recent} loading={res.loading} />
+        <StatTile
+          icon="time"
+          label="Latest profile update"
+          value={stats.latest ? <RelativeTime iso={stats.latest} /> : undefined}
+          loading={res.loading}
+        />
+      </div>
 
       <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
         <InputGroup
-          small
           leftIcon="search"
           placeholder="Search by id or property…"
-          style={{ width: 260, maxWidth: "100%" }}
+          style={{ width: 280, maxWidth: "100%" }}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />

@@ -16,20 +16,21 @@ const POOL: Omit<FakeEvent, "key">[] = [
   { icon: "⭐", event: "NPS response", desc: "score: 10 · user_72", channel: "growth" },
 ];
 
-const AGES = ["now", "1m", "2m", "4m", "8m", "14m", "22m"];
+const AGES = ["now", "1m", "2m", "4m", "8m", "14m", "22m", "31m", "44m", "1h"];
+const MAX_ITEMS = 10;
 
 /** Animated mock of the live event feed for the landing page hero. */
 export function LiveFeedMock() {
-  const counter = useRef(4);
+  const counter = useRef(8);
   const [items, setItems] = useState<FakeEvent[]>(() =>
-    POOL.slice(0, 4).map((e, i) => ({ ...e, key: i })),
+    POOL.slice(0, 8).map((e, i) => ({ ...e, key: i })),
   );
 
   useEffect(() => {
     const id = setInterval(() => {
       setItems((prev) => {
         const next = POOL[Math.floor(Math.random() * POOL.length)];
-        return [{ ...next, key: counter.current++ }, ...prev].slice(0, 7);
+        return [{ ...next, key: counter.current++ }, ...prev].slice(0, MAX_ITEMS);
       });
     }, 2400);
     return () => clearInterval(id);

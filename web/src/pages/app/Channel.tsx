@@ -86,7 +86,7 @@ export default function ChannelPage() {
   };
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div className="rl-page rl-page-data">
       <PageHeader
         icon={<span style={{ fontSize: 26 }}>{channel.icon?.trim() || "#"}</span>}
         title={channel.name}

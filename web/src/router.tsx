@@ -12,6 +12,7 @@ import { AppLayout, ProjectLayout } from "@/components/Layouts";
 import Landing from "@/pages/public/Landing";
 import Pricing from "@/pages/public/Pricing";
 import Docs from "@/pages/public/Docs";
+import AgentsGuide from "@/pages/public/AgentsGuide";
 import SignIn from "@/pages/auth/SignIn";
 import SignUp from "@/pages/auth/SignUp";
 import Invite from "@/pages/auth/Invite";
@@ -35,6 +36,7 @@ const authSearch = (s: Record<string, unknown>) => ({
 const landing = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Landing });
 const pricing = createRoute({ getParentRoute: () => rootRoute, path: "/pricing", component: Pricing });
 const docs = createRoute({ getParentRoute: () => rootRoute, path: "/docs", component: Docs });
+const agentsGuide = createRoute({ getParentRoute: () => rootRoute, path: "/docs/agents", component: AgentsGuide });
 const signin = createRoute({ getParentRoute: () => rootRoute, path: "/signin", validateSearch: authSearch, component: SignIn });
 const signup = createRoute({ getParentRoute: () => rootRoute, path: "/signup", validateSearch: authSearch, component: SignUp });
 const invite = createRoute({ getParentRoute: () => rootRoute, path: "/invite/$token", component: Invite });
@@ -84,6 +86,7 @@ const routeTree = rootRoute.addChildren([
   landing,
   pricing,
   docs,
+  agentsGuide,
   signin,
   signup,
   invite,

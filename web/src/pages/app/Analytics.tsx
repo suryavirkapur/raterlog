@@ -48,12 +48,10 @@ export default function Analytics() {
     [projectId, range, interval, channel, eventName],
     { pollMs: 30_000 },
   );
-  // Separate daily series for the "today vs yesterday" KPI.
-  const daily = useAsync(
-    () => analytics.timeseries(projectId, { range: "7d", interval: "day" }),
-    [projectId],
-    { pollMs: 60_000 },
-  );
+  // Exact totals for the range (+ today / yesterday) for the KPI tiles.
+  const summary = useAsync(() => analytics.summary(projectId, range), [projectId, range], {
+    pollMs: 30_000,
+  });
   const byEvent = useAsync(() => analytics.breakdown(projectId, { range, by: "event", limit: 15 }), [projectId, range], {
     pollMs: 30_000,
   });
@@ -66,28 +64,15 @@ export default function Analytics() {
     pollMs: 30_000,
   });
 
-  const total = series.data?.reduce((n, p) => n + p.count, 0);
-  const uniqueUsers = byUser.data?.length;
-
   const dayDelta = useMemo(() => {
-    if (!daily.data) return undefined;
-    const byDate = new Map<string, number>();
-    for (const p of daily.data) {
-      const d = new Date(p.t);
-      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-      byDate.set(key, (byDate.get(key) ?? 0) + p.count);
-    }
-    const key = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-    const now = new Date();
-    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    const todayCount = byDate.get(key(now)) ?? 0;
-    const yestCount = byDate.get(key(yesterday)) ?? 0;
+    if (!summary.data) return undefined;
+    const { today: todayCount, yesterday: yestCount } = summary.data;
     return {
       today: todayCount,
       yesterday: yestCount,
       pct: yestCount === 0 ? (todayCount > 0 ? 100 : NaN) : ((todayCount - yestCount) / yestCount) * 100,
     };
-  }, [daily.data]);
+  }, [summary.data]);
 
   const eventOptions = useMemo(() => (byEvent.data ?? []).map((r) => r.key), [byEvent.data]);
 
@@ -99,7 +84,7 @@ export default function Analytics() {
   };
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1200, margin: "0 auto" }}>
+    <div className="rl-page rl-page-data">
       <PageHeader
         title="Analytics"
         subtitle={`${detail.company.name} — last ${range}`}
@@ -107,13 +92,13 @@ export default function Analytics() {
       />
 
       <div className="rl-stats">
-        <StatTile icon="pulse" label="Total events" value={total} loading={series.loading} />
-        <StatTile icon="people" label="Unique users" value={uniqueUsers} loading={byUser.loading} />
+        <StatTile icon="pulse" label="Total events" value={summary.data?.total} loading={summary.loading} />
+        <StatTile icon="people" label="Unique users" value={summary.data?.unique_users} loading={summary.loading} />
         <StatTile
           icon="calendar"
           label="Events today"
           value={dayDelta?.today}
-          loading={daily.loading}
+          loading={summary.loading}
           sub={`${fmtNum(dayDelta?.yesterday ?? 0)} yesterday`}
           delta={dayDelta ? { pct: dayDelta.pct, against: "vs yesterday" } : undefined}
         />
@@ -188,23 +173,19 @@ export default function Analytics() {
         </ResponsiveContainer>
       </ChartCard>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 12,
-          marginTop: 12,
-        }}
-      >
-        <BreakdownCard title="By event" rows={byEvent.data} loading={byEvent.loading} error={byEvent.error} onPick={setEventName} />
-        <BreakdownCard title="By channel" rows={byChannel.data} loading={byChannel.loading} error={byChannel.error} />
-        <BreakdownCard title="By user" rows={byUser.data} loading={byUser.loading} error={byUser.error} />
+      <div className="rl-analytics-lower">
+        <div className="rl-breakdown-grid">
+          <BreakdownCard title="By event" rows={byEvent.data} loading={byEvent.loading} error={byEvent.error} onPick={setEventName} />
+          <BreakdownCard title="By channel" rows={byChannel.data} loading={byChannel.loading} error={byChannel.error} />
+          <BreakdownCard title="By user" rows={byUser.data} loading={byUser.loading} error={byUser.error} />
+        </div>
+        <FunnelBuilder projectId={projectId} range={range} eventOptions={eventOptions} />
       </div>
-
-      <FunnelBuilder projectId={projectId} range={range} eventOptions={eventOptions} />
     </div>
   );
 }
+
+const BREAKDOWN_CAP = 8;
 
 function BreakdownCard({
   title,
@@ -219,6 +200,9 @@ function BreakdownCard({
   error: Error | null;
   onPick?: (key: string) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? rows : rows?.slice(0, BREAKDOWN_CAP);
+  const hidden = (rows?.length ?? 0) - (shown?.length ?? 0);
   return (
     <Card compact>
       <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{title}</div>
@@ -226,15 +210,25 @@ function BreakdownCard({
         <div className={Classes.SKELETON} style={{ height: 120, borderRadius: 6 }} />
       ) : error ? (
         <NonIdealState icon="error" title="Unavailable" description={errMsg(error)} layout="horizontal" />
-      ) : !rows?.length ? (
+      ) : !shown?.length ? (
         <div className="rl-muted" style={{ fontSize: 13, padding: "12px 0" }}>
           No data for this range
         </div>
       ) : (
         <div>
-          {rows.map((r) => (
-            <BreakdownBar key={r.key} row={r} max={rows[0]!.count} onPick={onPick} />
+          {shown.map((r) => (
+            <BreakdownBar key={r.key} row={r} max={rows![0]!.count} onPick={onPick} />
           ))}
+          {(hidden > 0 || showAll) && (
+            <Button
+              className="rl-breakdown-more"
+              small
+              minimal
+              icon={showAll ? "chevron-up" : "chevron-down"}
+              text={showAll ? "Show less" : `Show all ${rows!.length}`}
+              onClick={() => setShowAll((v) => !v)}
+            />
+          )}
         </div>
       )}
     </Card>
@@ -299,7 +293,7 @@ function FunnelBuilder({
   const first = result?.[0]?.count ?? 0;
 
   return (
-    <Card compact style={{ marginTop: 12 }}>
+    <Card compact>
       <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Funnels</div>
       <div className="rl-muted" style={{ fontSize: 12.5, marginBottom: 12 }}>
         Pick 2–6 events in order to see conversion between steps.

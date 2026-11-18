@@ -49,7 +49,7 @@ export default function Settings() {
   const usage = useAsync(() => billing.usage(projectId).catch(() => undefined), [projectId]);
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 980, margin: "0 auto" }}>
+    <div className="rl-page rl-page-narrow">
       <PageHeader title="Settings" subtitle={detail.company.name} />
       <Tabs
         id="settings-tabs"

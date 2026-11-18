@@ -148,9 +148,10 @@ export function SidebarContent({
         </Button>
       </Popover>
 
-      {projectId ? (
-        <>
-          <Section label="Project" />
+      <div className="rl-side-scroll">
+        {projectId ? (
+          <>
+            <Section label="Project" />
           <NavItem
             to="/app/$projectId"
             params={{ projectId }}
@@ -228,28 +229,32 @@ export function SidebarContent({
           {detail && channels.length === 0 && (
             <div className="rl-hint">No channels yet — they're created by your first event.</div>
           )}
-        </>
-      ) : (
-        <>
-          <Section label="Projects" />
-          {projectList?.map((p) => (
-            <NavItem
-              key={p.id}
-              to="/app/$projectId"
-              params={{ projectId: p.id }}
-              icon="folder-close"
-              label={p.name}
-              onClick={onNavigate}
-            />
-          ))}
-          {!listLoading && projectList?.length === 0 && (
-            <div className="rl-hint">No projects yet.</div>
-          )}
-        </>
-      )}
+          </>
+        ) : (
+          <>
+            <Section label="Projects" />
+            {projectList?.map((p) => (
+              <NavItem
+                key={p.id}
+                to="/app/$projectId"
+                params={{ projectId: p.id }}
+                icon="folder-close"
+                label={p.name}
+                onClick={onNavigate}
+              />
+            ))}
+            {!listLoading && projectList?.length === 0 && (
+              <div className="rl-hint">No projects yet.</div>
+            )}
+          </>
+        )}
+      </div>
 
-      <div className="rl-spacer" />
-      {projectId && <UsageMeter projectId={projectId} usage={usage} />}
+      {projectId && (
+        <div className="rl-side-footer">
+          <UsageMeter projectId={projectId} usage={usage} />
+        </div>
+      )}
     </div>
   );
 }

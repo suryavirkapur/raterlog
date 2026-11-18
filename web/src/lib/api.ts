@@ -185,7 +185,12 @@ export const events = {
     api<RlEvent[]>(`/api/companies/${projectId}/events${qs(f as any)}`),
 };
 
+export type AnalyticsSummary = { total: number; unique_users: number; today: number; yesterday: number };
+
 export const analytics = {
+  /** Exact totals for the range (+ today / yesterday, UTC days). Use this for KPI tiles. */
+  summary: (projectId: string, range: Range) =>
+    api<AnalyticsSummary>(`/api/companies/${projectId}/analytics/summary${qs({ range })}`),
   timeseries: (
     projectId: string,
     p: { range: Range; interval: Interval; channel?: string; event?: string },

@@ -141,3 +141,15 @@ pub async fn usage(req: HttpRequest, path: web::Path<String>, state: web::Data<A
         "retention_days": plan.retention_days,
     }))
 }
+
+#[get("/api/companies/{company_id}/analytics/summary")]
+pub async fn summary(req: HttpRequest, path: web::Path<String>, state: web::Data<AppState>, q: web::Query<HashMap<String, String>>) -> HttpResponse {
+    let company_id = path.into_inner();
+    if let Err(r) = require_company_member(&req, &state, &company_id).await {
+        return r;
+    }
+    match state.ch.summary(&company_id, range_start(q.get("range"))).await {
+        Ok(v) => json_ok(v),
+        Err(e) => error_json(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}

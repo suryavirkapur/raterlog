@@ -35,7 +35,7 @@ struct LogSnagInput {
     timestamp: Option<f64>,
 }
 
-fn value_to_tags(v: Option<&serde_json::Value>) -> BTreeMap<String, String> {
+pub fn value_to_tags(v: Option<&serde_json::Value>) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     if let Some(serde_json::Value::Object(map)) = v {
         for (k, v) in map.iter().take(50) {
@@ -60,17 +60,29 @@ pub struct NewEvent {
     pub at: Option<DateTime<Utc>>,
 }
 
-/// Quota check → insert into ClickHouse → bump the counter.
 async fn ingest(
     state: &web::Data<AppState>,
     company_id: &str,
     channel: &pg::Channel,
     e: NewEvent,
 ) -> Result<PublicEvent, HttpResponse> {
+    ingest_event(state, company_id, channel, e)
+        .await
+        .map_err(|(status, msg)| error_json(status, &msg))
+}
+
+/// Quota check → insert into ClickHouse → bump the counter. Shared by the
+/// HTTP ingest routes and the MCP server.
+pub async fn ingest_event(
+    state: &web::Data<AppState>,
+    company_id: &str,
+    channel: &pg::Channel,
+    e: NewEvent,
+) -> Result<PublicEvent, (StatusCode, String)> {
     let plan = match pg::company_billing(&state.client, company_id).await {
         Ok(Some(b)) => billing::plan(&b.plan),
-        Ok(None) => return Err(error_json(StatusCode::UNAUTHORIZED, "unknown project")),
-        Err(e) => return Err(error_json(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())),
+        Ok(None) => return Err((StatusCode::UNAUTHORIZED, "unknown project".into())),
+        Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
     };
     let used = match state.quota.get_fresh(company_id) {
         Some(n) => n,
@@ -84,9 +96,9 @@ async fn ingest(
     // Free projects stop at their limit; paid projects keep ingesting (we
     // never drop a paying customer's data) and get nudged to upgrade.
     if plan.id == "free" && plan.events_limit >= 0 && used >= plan.events_limit as u64 {
-        return Err(error_json(
+        return Err((
             StatusCode::PAYMENT_REQUIRED,
-            "monthly event limit reached for the free plan; upgrade at /app to keep ingesting",
+            "monthly event limit reached for the free plan; upgrade at /app to keep ingesting".into(),
         ));
     }
 
@@ -111,9 +123,35 @@ async fn ingest(
         .ch
         .insert(&ev)
         .await
-        .map_err(|err| error_json(StatusCode::INTERNAL_SERVER_ERROR, &err))?;
+        .map_err(|err| (StatusCode::INTERNAL_SERVER_ERROR, err))?;
     state.quota.bump(company_id);
     Ok(ev.into())
+}
+
+/// Find a channel by name (case-insensitive) or create it, LogSnag-style.
+pub async fn resolve_channel(
+    state: &web::Data<AppState>,
+    company_id: &str,
+    name: &str,
+    icon: Option<&str>,
+) -> Result<pg::Channel, String> {
+    let name = name.trim().to_lowercase();
+    if name.is_empty() {
+        return Err("channel is required".into());
+    }
+    match pg::channel_by_name(&state.client, company_id, &name).await {
+        Ok(Some(c)) => Ok(c),
+        Ok(None) => pg::create_channel(
+            &state.client,
+            &generate_id(15),
+            company_id,
+            &name,
+            icon.filter(|s| !s.is_empty()).unwrap_or("📡"),
+        )
+        .await
+        .map_err(|e| format!("failed to create channel: {e}")),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 async fn legacy_create(req: HttpRequest, data: LegacyLogInput, state: web::Data<AppState>) -> HttpResponse {
@@ -217,21 +255,9 @@ pub async fn create_logsnag_log(req: HttpRequest, body: web::Json<LogSnagInput>,
         return error_json(StatusCode::FORBIDDEN, "token does not belong to this project");
     }
 
-    let channel = match pg::channel_by_name(&state.client, &company_id, &channel_name).await {
-        Ok(Some(channel)) => channel,
-        Ok(None) => match pg::create_channel(
-            &state.client,
-            &generate_id(15),
-            &company_id,
-            &channel_name,
-            body.icon.as_deref().filter(|s| !s.is_empty()).unwrap_or("📡"),
-        )
-        .await
-        {
-            Ok(channel) => channel,
-            Err(e) => return error_json(StatusCode::INTERNAL_SERVER_ERROR, &format!("failed to create channel: {e}")),
-        },
-        Err(e) => return error_json(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    let channel = match resolve_channel(&state, &company_id, &channel_name, body.icon.as_deref()).await {
+        Ok(c) => c,
+        Err(e) => return error_json(StatusCode::INTERNAL_SERVER_ERROR, &e),
     };
 
     let ne = NewEvent {

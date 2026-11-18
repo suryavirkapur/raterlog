@@ -162,6 +162,9 @@ pub async fn ensure_schema(client: &Client) -> Result<(), tokio_postgres::Error>
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "billingCustomerId" TEXT;
             ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "subscriptionId" TEXT;
+            DELETE FROM "Channel" a USING "Channel" b
+              WHERE a."companyID" = b."companyID" AND lower(a.name) = lower(b.name) AND a.id > b.id;
+            CREATE UNIQUE INDEX IF NOT EXISTS channel_company_name_idx ON "Channel"("companyID", lower(name));
             CREATE INDEX IF NOT EXISTS session_user_idx ON "Session"("userId");
             CREATE INDEX IF NOT EXISTS token_token_idx ON "Token"(token);
             "#,
@@ -416,17 +419,21 @@ pub async fn create_channel(
     name: &str,
     icon: &str,
 ) -> Result<Channel, tokio_postgres::Error> {
-    client
-        .execute(
-            r#"INSERT INTO "Channel" (id, name, icon, "companyID") VALUES ($1, $2, $3, $4)"#,
+    // Concurrent first events for a new channel race here; the unique index
+    // on (companyID, lower(name)) makes the loser reuse the winner's row.
+    let row = client
+        .query_one(
+            r#"INSERT INTO "Channel" (id, name, icon, "companyID") VALUES ($1, $2, $3, $4)
+               ON CONFLICT ("companyID", lower(name)) DO UPDATE SET name = "Channel".name
+               RETURNING id, name, icon, "companyID""#,
             &[&id, &name, &icon, &company_id],
         )
         .await?;
     Ok(Channel {
-        id: id.to_string(),
-        name: name.to_string(),
-        icon: icon.to_string(),
-        company_id: company_id.to_string(),
+        id: row.get(0),
+        name: row.get(1),
+        icon: row.get(2),
+        company_id: row.get(3),
     })
 }
 

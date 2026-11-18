@@ -445,6 +445,43 @@ impl ClickHouse {
             .collect())
     }
 
+    /// Headline numbers for the analytics page.
+    pub async fn summary(&self, company_id: &str, from: DateTime<Utc>) -> Result<serde_json::Value, String> {
+        use chrono::DurationRound;
+        let today = Utc::now().duration_trunc(chrono::Duration::days(1)).unwrap_or_else(|_| Utc::now());
+        let yesterday = today - chrono::Duration::days(1);
+        #[derive(Deserialize)]
+        struct Row {
+            #[serde(with = "u64_string_num")]
+            total: u64,
+            #[serde(with = "u64_string_num")]
+            users: u64,
+            #[serde(with = "u64_string_num")]
+            today: u64,
+            #[serde(with = "u64_string_num")]
+            yesterday: u64,
+        }
+        let lo = id_floor(from.min(yesterday));
+        let rows: Vec<Row> = self
+            .rows(
+                "SELECT countIf(id >= {from:UInt64}) AS total,
+                        uniqExactIf(user_id, id >= {from:UInt64} AND user_id != '') AS users,
+                        countIf(id >= {today:UInt64}) AS today,
+                        countIf(id >= {yday:UInt64} AND id < {today:UInt64}) AS yesterday
+                 FROM events WHERE company_id = {c:String} AND id >= {lo:UInt64}",
+                &vec![
+                    ("c".into(), company_id.into()),
+                    ("from".into(), id_floor(from).to_string()),
+                    ("today".into(), id_floor(today).to_string()),
+                    ("yday".into(), id_floor(yesterday).to_string()),
+                    ("lo".into(), lo.to_string()),
+                ],
+            )
+            .await?;
+        let r = rows.into_iter().next().ok_or("no summary row")?;
+        Ok(serde_json::json!({ "total": r.total, "unique_users": r.users, "today": r.today, "yesterday": r.yesterday }))
+    }
+
     pub async fn count_since(&self, company_id: &str, from: DateTime<Utc>) -> Result<u64, String> {
         #[derive(Deserialize)]
         struct Row {

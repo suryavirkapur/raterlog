@@ -5,9 +5,12 @@ import type { RlEvent } from "@/lib/api";
 import { Markdown } from "./Markdown";
 import { RelativeTime } from "./RelativeTime";
 
+const MAX_TAGS = 3;
+
 /**
- * One event row: emoji, name, channel tag, markdown description, clickable
- * tags, user link and relative time. Click opens the detail drawer.
+ * One dense event row: emoji, name, channel tag and markdown description on a
+ * single line, trailing tag chips, then user + time in fixed-width columns.
+ * Click opens the detail drawer.
  */
 export const EventRow = memo(function EventRow({
   ev,
@@ -28,6 +31,8 @@ export const EventRow = memo(function EventRow({
   onChannelClick?: (channelId: string, channelName: string) => void;
 }) {
   const tags = Object.entries(ev.tags ?? {});
+  const shown = tags.slice(0, MAX_TAGS);
+  const extra = tags.length - shown.length;
   return (
     <div
       className={`rl-event${fresh ? " rl-event-new" : ""}`}
@@ -42,61 +47,65 @@ export const EventRow = memo(function EventRow({
       }}
     >
       <div className="rl-event-icon">{ev.icon?.trim() || "•"}</div>
-      <div className="rl-event-body">
-        <div className="rl-event-head">
-          <span className="rl-event-name">{ev.event}</span>
-          {showChannel && ev.channel && (
+      <div className="rl-event-main">
+        <span className="rl-event-name">{ev.event}</span>
+        {showChannel && ev.channel && (
+          <Tag
+            minimal
+            className="rl-event-chan"
+            interactive={!!onChannelClick}
+            onClick={
+              onChannelClick
+                ? (e) => {
+                    e.stopPropagation();
+                    onChannelClick(ev.channel_id, ev.channel);
+                  }
+                : undefined
+            }
+          >
+            {ev.channel}
+          </Tag>
+        )}
+        {ev.notify && (
+          <Tooltip content="Push notification enabled" placement="top" hoverOpenDelay={200}>
+            <Icon icon="notifications" size={11} className="rl-muted" />
+          </Tooltip>
+        )}
+        {ev.description && (
+          <span className="rl-event-desc">
+            <Markdown text={ev.description} />
+          </span>
+        )}
+      </div>
+      {tags.length > 0 && (
+        <div className="rl-event-tags">
+          {shown.map(([k, v]) => (
             <Tag
+              key={k}
               minimal
-              interactive={!!onChannelClick}
+              round
+              interactive={!!onTagClick}
               onClick={
-                onChannelClick
+                onTagClick
                   ? (e) => {
                       e.stopPropagation();
-                      onChannelClick(ev.channel_id, ev.channel);
+                      onTagClick(`${k}:${v}`);
                     }
                   : undefined
               }
             >
-              {ev.channel}
+              {k}: {v}
+            </Tag>
+          ))}
+          {extra > 0 && (
+            <Tag minimal round>
+              +{extra}
             </Tag>
           )}
-          {ev.notify && (
-            <Tooltip content="Push notification enabled" placement="top" hoverOpenDelay={200}>
-              <Icon icon="notifications" size={11} className="rl-muted" />
-            </Tooltip>
-          )}
         </div>
-        {ev.description && (
-          <div className="rl-event-desc">
-            <Markdown text={ev.description} />
-          </div>
-        )}
-        {tags.length > 0 && (
-          <div className="rl-event-tags">
-            {tags.map(([k, v]) => (
-              <Tag
-                key={k}
-                minimal
-                round
-                interactive={!!onTagClick}
-                onClick={
-                  onTagClick
-                    ? (e) => {
-                        e.stopPropagation();
-                        onTagClick(`${k}:${v}`);
-                      }
-                    : undefined
-                }
-              >
-                {k}: {v}
-              </Tag>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
       <div className="rl-event-meta">
-        {ev.user_id && (
+        {ev.user_id ? (
           <Link
             className="rl-event-user"
             to="/app/$projectId/users/$userId"
@@ -105,8 +114,10 @@ export const EventRow = memo(function EventRow({
           >
             {ev.user_id}
           </Link>
+        ) : (
+          <span className="rl-event-user" />
         )}
-        <RelativeTime iso={ev.timestamp} />
+        <RelativeTime iso={ev.timestamp} className="rl-event-time" />
       </div>
     </div>
   );

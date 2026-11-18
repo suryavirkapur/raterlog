@@ -100,6 +100,7 @@ export default function Docs() {
             ["#identify", "POST /v1/identify"],
             ["#insight", "Insights"],
             ["#errors", "Errors"],
+            ["/docs/agents", "AI agents & MCP →"],
           ].map(([href, label]) => (
             <a key={href} href={href}>
               <Tag minimal interactive>

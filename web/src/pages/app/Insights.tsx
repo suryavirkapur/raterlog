@@ -25,7 +25,7 @@ export default function Insights() {
   }, [reload]);
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div className="rl-page rl-page-data">
       <PageHeader
         title="Insights"
         subtitle="Live KPIs your app pushes with one HTTP call"
@@ -57,27 +57,48 @@ export default function Insights() {
           </Callout>
         </Card>
       ) : (
-        <div className="rl-insight-grid">
-          {insights.map((ins) => (
-            <Card key={ins.id} compact>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                <span className="rl-insight-icon">{ins.icon?.trim() || "📈"}</span>
-                <Button
-                  small
-                  minimal
-                  icon="duplicate"
-                  title="Copy value"
-                  onClick={() => copyText(ins.value, `"${ins.title}" copied`)}
-                />
+        <>
+          <div className="rl-insight-grid">
+            {insights.map((ins) => (
+              <Card key={ins.id} compact>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                  <span className="rl-insight-icon">{ins.icon?.trim() || "📈"}</span>
+                  <Button
+                    small
+                    minimal
+                    icon="duplicate"
+                    title="Copy value"
+                    onClick={() => copyText(ins.value, `"${ins.title}" copied`)}
+                  />
+                </div>
+                <div className="rl-insight-title">{ins.title}</div>
+                <div className="rl-insight-value">{ins.value}</div>
+                <div className="rl-stat-sub">
+                  updated <RelativeTime iso={ins.updatedAt} />
+                </div>
+              </Card>
+            ))}
+          </div>
+          <Card style={{ marginTop: 16 }}>
+            <div className="rl-stat-label" style={{ marginBottom: 10 }}>
+              Update these from your backend
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12 }}>
+              <div>
+                <div className="rl-stat-sub" style={{ marginBottom: 6 }}>
+                  Set a value — POST /v1/insight
+                </div>
+                <pre className="rl-pre">{snippet(INGEST_DOCS.insight)}</pre>
               </div>
-              <div className="rl-insight-title">{ins.title}</div>
-              <div className="rl-insight-value">{ins.value}</div>
-              <div className="rl-stat-sub">
-                updated <RelativeTime iso={ins.updatedAt} />
+              <div>
+                <div className="rl-stat-sub" style={{ marginBottom: 6 }}>
+                  Increment a counter — PATCH /v1/insight
+                </div>
+                <pre className="rl-pre">{snippet(INGEST_DOCS.insightInc)}</pre>
               </div>
-            </Card>
-          ))}
-        </div>
+            </div>
+          </Card>
+        </>
       )}
     </div>
   );

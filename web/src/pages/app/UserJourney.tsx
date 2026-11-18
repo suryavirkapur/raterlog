@@ -44,7 +44,7 @@ export default function UserJourney() {
   const props = Object.entries(profile?.properties ?? {});
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div className="rl-page rl-page-data">
       <PageHeader
         icon={<Button small minimal icon="arrow-left" onClick={() => history.back()} />}
         title={<span className="rl-mono" style={{ fontSize: 17 }}>{userId}</span>}
@@ -62,7 +62,7 @@ export default function UserJourney() {
         />
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12, marginBottom: 16 }}>
+          <div className="rl-journey-top">
             <Card compact>
               <div className="rl-stat-label" style={{ marginBottom: 8 }}>Profile</div>
               {props.length === 0 ? (
@@ -85,7 +85,7 @@ export default function UserJourney() {
                 </div>
               )}
             </Card>
-            <div className="rl-stats" style={{ marginBottom: 0, gridTemplateColumns: "1fr" }}>
+            <div className="rl-stats">
               <StatTile icon="feed" label="Total events" value={stats.total} />
               <StatTile
                 icon="time"

@@ -19,6 +19,9 @@ export function MarketingNav() {
           <Link to="/docs" className="rl-nav-link">
             Docs
           </Link>
+          <Link to="/docs/agents" className="rl-nav-link">
+            AI agents
+          </Link>
           <Link to="/pricing" className="rl-nav-link">
             Pricing
           </Link>

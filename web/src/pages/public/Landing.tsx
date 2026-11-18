@@ -98,6 +98,11 @@ const FEATURES: { icon: IconName; title: string; body: string }[] = [
     body: "Follow a single user through every event they triggered, in order.",
   },
   {
+    icon: "changes",
+    title: "Channels",
+    body: "Organize events into streams — payments, ops, growth — each with its own feed.",
+  },
+  {
     icon: "lightbulb",
     title: "Insights",
     body: "Pin live KPIs — MRR, signups today, active users — updated from your backend.",

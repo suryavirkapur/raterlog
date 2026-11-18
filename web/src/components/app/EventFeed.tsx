@@ -279,17 +279,15 @@ export function EventFeed({
       <div className="rl-feed-filters">
         <InputGroup
           className="rl-feed-search"
-          small
           leftIcon="search"
           placeholder="Search events…"
           value={qInput}
           onChange={(e) => setQInput(e.target.value)}
         />
         <InputGroup
-          small
           leftIcon="pulse"
           placeholder="Event name"
-          style={{ width: 150 }}
+          style={{ width: 160 }}
           value={eventInput}
           onChange={(e) => setEventInput(e.target.value)}
           list={datalistId}
@@ -301,7 +299,6 @@ export function EventFeed({
         </datalist>
         {!hideChannelFilter && (
           <HTMLSelect
-            minimal
             value={filters.channel ?? ""}
             onChange={(e) => onFiltersChange({ ...filters, channel: e.target.value || undefined })}
             options={[
@@ -311,15 +308,13 @@ export function EventFeed({
           />
         )}
         <InputGroup
-          small
           leftIcon="tag"
           placeholder="tag key:value"
-          style={{ width: 130 }}
+          style={{ width: 140 }}
           value={tagInput}
           onChange={(e) => setTagInput(e.target.value)}
         />
         <InputGroup
-          small
           leftIcon="person"
           placeholder="User id"
           style={{ width: 130 }}
@@ -327,13 +322,12 @@ export function EventFeed({
           onChange={(e) => setUserInput(e.target.value)}
         />
         {hasActiveFilters && (
-          <Button small minimal icon="filter-remove" text="Clear" onClick={() => onFiltersChange({})} />
+          <Button minimal icon="filter-remove" text="Clear" onClick={() => onFiltersChange({})} />
         )}
         <div className="rl-feed-controls">
           {notifPerm === "default" && (
             <Tooltip content="Enable browser notifications for events with notify: true" placement="bottom">
               <Button
-                small
                 minimal
                 icon="notifications"
                 onClick={() => {
@@ -343,14 +337,14 @@ export function EventFeed({
             </Tooltip>
           )}
           <ButtonGroup>
-            <Button small active={live} intent={live ? "success" : "none"} onClick={() => setLive((v) => !v)}>
+            <Button active={live} intent={live ? "success" : "none"} onClick={() => setLive((v) => !v)}>
               <span className="rl-live">
                 <span className={`rl-live-dot${live ? "" : " paused"}`} />
                 {live ? "Live" : "Paused"}
               </span>
             </Button>
             <Tooltip content="Reload" placement="bottom">
-              <Button small icon="refresh" onClick={() => setReloadTick((t) => t + 1)} loading={loading && events.length === 0} />
+              <Button icon="refresh" onClick={() => setReloadTick((t) => t + 1)} loading={loading && events.length === 0} />
             </Tooltip>
           </ButtonGroup>
         </div>
@@ -378,7 +372,7 @@ export function EventFeed({
           )
         ) : (
           groups.map((g) => (
-            <div key={g.label}>
+            <div key={g.label} className="rl-day-group">
               <div className="rl-day-header">{g.label}</div>
               {g.items.map((ev) => (
                 <EventRow
@@ -398,7 +392,7 @@ export function EventFeed({
         <div ref={sentinelRef} className="rl-feed-sentinel" />
         {hasMore && events.length > 0 && (
           <div className="rl-feed-more">
-            <Button small minimal loading={loadingMore} text="Load older events" onClick={() => void loadMore()} />
+            <Button minimal loading={loadingMore} text="Load older events" onClick={() => void loadMore()} />
           </div>
         )}
         {!hasMore && events.length > 0 && !loading && (

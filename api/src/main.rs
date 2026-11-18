@@ -12,6 +12,7 @@ mod ai;
 mod billing;
 mod ch;
 mod mail;
+mod mcp;
 mod pg;
 mod routes;
 mod state;
@@ -96,7 +97,13 @@ async fn main() -> std::io::Result<()> {
         let cors = Cors::default()
             .allow_any_origin()
             .allowed_methods(vec!["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
-            .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE])
+            .allowed_headers(vec![
+                header::AUTHORIZATION,
+                header::ACCEPT,
+                header::CONTENT_TYPE,
+                header::HeaderName::from_static("mcp-protocol-version"),
+                header::HeaderName::from_static("mcp-session-id"),
+            ])
             .max_age(3600);
 
         App::new()
@@ -141,12 +148,15 @@ async fn main() -> std::io::Result<()> {
             .service(routes::analytics::funnel)
             .service(routes::analytics::user_journey)
             .service(routes::analytics::usage)
+            .service(routes::analytics::summary)
             .service(routes::billing::plans)
             .service(routes::billing::checkout)
             .service(routes::billing::portal)
             .service(routes::billing::webhook)
             .service(routes::ai::summarize)
             .service(routes::ai::query)
+            .route("/mcp", web::post().to(mcp::post))
+            .route("/mcp", web::get().to(mcp::get))
             .default_service(web::to(spa::spa))
     })
     .bind(bind)?

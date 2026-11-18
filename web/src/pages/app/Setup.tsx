@@ -1,3 +1,4 @@
+import { ConnectAgent } from "@/components/app/ConnectAgent";
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -148,7 +149,7 @@ export default function Setup() {
   const canSend = tokenValue !== "<api-token>";
 
   return (
-    <div style={{ maxWidth: 760, margin: "0 auto", padding: "32px 24px 64px" }}>
+    <div className="rl-page rl-page-guide">
       <h1 style={{ fontSize: 24, margin: "0 0 4px" }}>Set up {projectName}</h1>
       <p style={{ opacity: 0.7, fontSize: 14, margin: "0 0 24px" }}>
         Five quick steps and your project is live.
@@ -332,6 +333,10 @@ export default function Setup() {
           </>
         )}
       </Step>
+
+      <div style={{ marginTop: 24 }}>
+        <ConnectAgent token={canSend ? tokenValue : undefined} projectName={detail.company.name} />
+      </div>
     </div>
   );
 }

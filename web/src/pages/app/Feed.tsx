@@ -32,7 +32,7 @@ export default function Feed() {
   };
 
   return (
-    <div style={{ padding: "20px 24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div className="rl-page rl-page-data">
       <PageHeader
         title="Live feed"
         subtitle={`${detail.company.name} — every event, as it happens`}

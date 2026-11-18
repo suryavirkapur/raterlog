@@ -99,7 +99,11 @@ export default function Pricing() {
             const free = p.price_month === 0;
             const price = yearly ? Math.round(p.price_year / 12) : p.price_month;
             return (
-              <Card key={p.id} className="rl-plan-card" elevation={1}>
+              <Card
+                key={p.id}
+                className={`rl-plan-card${p.id === "growth" ? " rl-plan-pop" : ""}`}
+                elevation={1}
+              >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <h3 style={{ margin: 0, fontSize: 16 }}>{p.name}</h3>
                   {p.id === "growth" && (

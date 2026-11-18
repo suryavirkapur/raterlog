@@ -5,15 +5,16 @@
   overflow: hidden;
 }
 
-/* ── Sidebar ── */
+/* ── Sidebar ──
+   Fixed header (logo + switcher), a scrollable nav region (project nav +
+   channel list), and a pinned footer with the usage meter. */
 .rl-sidebar {
   width: 252px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--rl-border, #d8dce2);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 body:not(.bp6-dark) .rl-sidebar {
   --rl-border: #d8dce2;
@@ -31,7 +32,15 @@ body.bp6-dark .rl-sidebar {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 10px 8px;
+  padding: 10px 8px 8px;
+}
+.rl-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 8px -8px 0;
+  padding: 0 8px 4px;
 }
 .rl-logo-row {
   display: flex;
@@ -54,7 +63,7 @@ body.bp6-dark .rl-sidebar {
   letter-spacing: 0.07em;
   text-transform: uppercase;
   opacity: 0.55;
-  padding: 14px 10px 5px;
+  padding: 12px 10px 5px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -93,14 +102,20 @@ body.bp6-dark .rl-sidebar {
 body.bp6-dark .rl-navitem.rl-active {
   background: rgba(72, 135, 200, 0.24);
 }
+/* kbd hints: visible on hover/focus only — quiet until you need them. */
 .rl-kbd {
   font-family: var(--rl-mono);
   font-size: 10px;
-  opacity: 0.45;
-  border: 1px solid currentColor;
+  opacity: 0;
+  background: rgba(128, 136, 148, 0.16);
   border-radius: 4px;
-  padding: 0 4px;
+  padding: 0 5px;
   line-height: 15px;
+  transition: opacity 0.15s ease;
+}
+.rl-navitem:hover .rl-kbd,
+.rl-navitem:focus-visible .rl-kbd {
+  opacity: 0.85;
 }
 .rl-collapsed .rl-nav-label,
 .rl-collapsed .rl-section-label .rl-label-text,
@@ -117,7 +132,7 @@ body.bp6-dark .rl-navitem.rl-active {
 }
 .rl-collapsed .rl-section-label {
   justify-content: center;
-  padding: 14px 0 5px;
+  padding: 12px 0 5px;
 }
 .rl-hint {
   font-size: 12px;
@@ -141,12 +156,19 @@ body.bp6-dark .rl-navitem.rl-active {
   white-space: nowrap;
 }
 
-/* usage meter */
+/* sidebar footer: pinned below the scroll region, separated by a rule */
+.rl-side-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--rl-border, #d8dce2);
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+/* usage meter: filled block rather than a floating outlined card */
 .rl-usage {
   padding: 10px;
-  margin-top: 8px;
   border-radius: 8px;
-  border: 1px solid var(--rl-border, #d8dce2);
+  background: rgba(128, 136, 148, 0.1);
   font-size: 12px;
 }
 .rl-usage-head {

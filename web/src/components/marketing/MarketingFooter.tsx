@@ -15,6 +15,9 @@ export function MarketingFooter() {
           <Link to="/docs" className="rl-footer-link">
             Docs
           </Link>
+          <Link to="/docs/agents" className="rl-footer-link">
+            AI agents
+          </Link>
           <Link to="/pricing" className="rl-footer-link">
             Pricing
           </Link>

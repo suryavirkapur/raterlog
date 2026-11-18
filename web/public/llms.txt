@@ -1,0 +1,33 @@
+# Raterlog
+
+> Real-time event tracking for products (LogSnag-compatible). Send an event with one HTTP request and get a live feed, push notifications, charts, funnels, user journeys and KPI insights. Base URL: https://raterlog.com
+
+All requests use a project API token: `Authorization: Bearer <token>` (Settings → API tokens). One token = one project.
+
+## MCP server
+
+- URL: https://raterlog.com/mcp — Streamable HTTP, stateless, JSON responses. Header `Authorization: Bearer <token>`.
+- Claude Code: `claude mcp add --transport http raterlog https://raterlog.com/mcp --header "Authorization: Bearer <token>"`
+- Write tools: log_event, identify_user, set_insight, increment_insight
+- Read tools: search_events, event_stats, event_timeseries, top_breakdown, funnel, user_journey, list_channels, list_insights, get_usage
+- Ranges: 24h, 7d, 30d, 90d. Channels are created on first use.
+
+## HTTP API
+
+- `POST /v1/log` — {"project","channel","event","description?","icon?","notify?","tags?":{k:v},"user_id?","timestamp?":unix_seconds}
+- `POST /v1/identify` — {"project","user_id","properties":{...}} (merged)
+- `POST /v1/insight` — {"project","title","value","icon?"}; `PATCH /v1/insight` with "value":{"$inc":n}
+- `project` is the project name (or id) and must match the token. Free plan returns 402 when the monthly limit is reached.
+
+## Guidance for agents instrumenting code
+
+- Keep logging fire-and-forget with a short timeout; never block or fail the user's request.
+- Use lowercase channels (signups, payments, errors, ops), short event titles, one emoji icon, tags for dimensions, user_id when known.
+- notify=true only for events a human must see now (new paying customer, payment failure, critical error).
+- Never send secrets, passwords, tokens or full card numbers.
+
+## Docs
+
+- [API quickstart](https://raterlog.com/docs)
+- [AI agents & MCP guide](https://raterlog.com/docs/agents)
+- [Pricing](https://raterlog.com/pricing)

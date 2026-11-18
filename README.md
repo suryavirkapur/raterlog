@@ -29,6 +29,18 @@ curl -X POST https://raterlog.com/v1/log \
 `project` is the project name (or id). Channels are created on first use.
 Legacy: `POST /api/logs` / `POST /log` with `channel_id`, `event_name`, `event_payload`, `metadata`.
 
+## MCP server (AI agents)
+
+`https://raterlog.com/mcp`: Streamable HTTP, stateless, `Authorization: Bearer <project token>`.
+
+```sh
+claude mcp add --transport http raterlog https://raterlog.com/mcp --header "Authorization: Bearer $TOKEN"
+```
+
+Write tools: `log_event`, `identify_user`, `set_insight`, `increment_insight`.
+Read tools: `search_events`, `event_stats`, `event_timeseries`, `top_breakdown`, `funnel`, `user_journey`, `list_channels`, `list_insights`, `get_usage`.
+Implementation: `api/src/mcp.rs`. Setup guide for every client: `/docs/agents` (and the in-app Setup guide with your token filled in); summary for LLMs at `/llms.txt`.
+
 ## Dashboard API (session cookie)
 
 Auth `/api/auth/*`; projects `/api/companies[/{id}]` with channels, tokens, invites;
