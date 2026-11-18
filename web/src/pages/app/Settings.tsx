@@ -370,6 +370,17 @@ const WEBHOOK_SOURCES: {
   steps: string[];
 }[] = [
   {
+    id: "dodo",
+    name: "Dodo Payments",
+    channel: "payments",
+    secretLabel: "Signing secret (whsec_…)",
+    steps: [
+      "Dodo Dashboard → Developer → Webhooks → Add endpoint",
+      "Paste the webhook URL and subscribe to payment, refund, dispute and subscription events",
+      "Copy the signing secret into the field below",
+    ],
+  },
+  {
     id: "stripe",
     name: "Stripe",
     channel: "payments",
@@ -401,17 +412,6 @@ const WEBHOOK_SOURCES: {
       "Project → Settings → Webhooks → Create",
       "Paste the webhook URL and pick deployment events",
       "Copy the generated secret into the field below",
-    ],
-  },
-  {
-    id: "dodo",
-    name: "Dodo Payments",
-    channel: "payments",
-    secretLabel: "Signing secret (whsec_…)",
-    steps: [
-      "Dodo Dashboard → Developer → Webhooks → Add endpoint",
-      "Paste the webhook URL and select payment/subscription events",
-      "Copy the signing secret into the field below",
     ],
   },
   {

@@ -240,10 +240,10 @@ export default function Docs() {
               </thead>
               <tbody>
                 {[
+                  ["dodo", "payments", "Payments, refunds, disputes, subscriptions, invoices, payouts · Standard Webhooks (whsec_…)"],
                   ["stripe", "payments", "Checkouts, subscriptions, invoices, refunds · Stripe-Signature"],
                   ["github", "github", "Push, pull requests, releases, issues, stars · X-Hub-Signature-256"],
                   ["vercel", "deploys", "Deployment created/succeeded/error · x-vercel-signature"],
-                  ["dodo", "payments", "Payments and subscriptions · Standard Webhooks (whsec_…)"],
                   ["generic", "webhooks", "Any JSON body: event, description, channel, icon, tags, user_id"],
                 ].map(([src, ch, desc]) => (
                   <tr key={src}>

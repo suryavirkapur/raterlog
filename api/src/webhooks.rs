@@ -20,7 +20,7 @@ use sha1::Sha1;
 use sha2::Sha256;
 use std::collections::BTreeMap;
 
-pub const SOURCES: &[&str] = &["stripe", "github", "vercel", "dodo", "generic"];
+pub const SOURCES: &[&str] = &["dodo", "stripe", "github", "vercel", "generic"];
 
 pub fn valid_source(s: &str) -> bool {
     SOURCES.contains(&s)
@@ -304,39 +304,96 @@ fn map_vercel(event_type: &str, body: &Value) -> Mapped {
 
 // ───────────────────────── dodo ─────────────────────────
 
+/// Dodo amounts are minor units; most are integers, but dispute `amount` is a string.
+fn dodo_amount(data: &Value) -> Option<String> {
+    ["total_amount", "recurring_pre_tax_amount", "amount", "settlement_amount"]
+        .iter()
+        .find_map(|k| match data.get(*k) {
+            Some(Value::Number(n)) => n.as_i64(),
+            Some(Value::String(s)) => s.trim().parse::<i64>().ok(),
+            _ => None,
+        })
+        .map(|c| format!("{:.2}", c as f64 / 100.0))
+}
+
+/// Friendly name, icon and whether to notify for each Dodo event type.
+/// Covers payments, refunds, disputes, subscriptions, invoices, recovery,
+/// dunning, license keys and payouts; anything else is title-cased.
+fn dodo_event(event_type: &str) -> (String, &'static str, bool) {
+    let (name, icon, notify) = match event_type {
+        "payment.succeeded" => ("Payment Succeeded", "💰", true),
+        "payment.failed" => ("Payment Failed", "⚠️", true),
+        "payment.processing" => ("Payment Processing", "⏳", false),
+        "payment.cancelled" => ("Payment Cancelled", "🚫", false),
+        "refund.succeeded" => ("Refund Issued", "↩️", true),
+        "refund.failed" => ("Refund Failed", "⚠️", true),
+        "dispute.opened" => ("Dispute Opened", "🚨", true),
+        "dispute.challenged" => ("Dispute Challenged", "⚖️", false),
+        "dispute.accepted" => ("Dispute Accepted", "⚖️", true),
+        "dispute.cancelled" => ("Dispute Cancelled", "⚖️", false),
+        "dispute.expired" => ("Dispute Expired", "⚖️", false),
+        "dispute.won" => ("Dispute Won", "🏆", true),
+        "dispute.lost" => ("Dispute Lost", "🚨", true),
+        "subscription.active" => ("New Subscription", "🎉", true),
+        "subscription.renewed" => ("Subscription Renewed", "🔁", false),
+        "subscription.plan_changed" => ("Plan Changed", "🔀", true),
+        "subscription.updated" => ("Subscription Updated", "📝", false),
+        "subscription.past_due" => ("Subscription Past Due", "⚠️", true),
+        "subscription.on_hold" => ("Subscription On Hold", "⏸️", true),
+        "subscription.paused" => ("Subscription Paused", "⏸️", false),
+        "subscription.unpaused" => ("Subscription Resumed", "▶️", false),
+        "subscription.update_payment_method" => ("Payment Method Updated", "💳", false),
+        "subscription.cancelled" => ("Subscription Cancelled", "😢", true),
+        "subscription.failed" => ("Subscription Failed", "⚠️", true),
+        "subscription.expired" => ("Subscription Expired", "⌛", false),
+        "invoice.paid" => ("Invoice Paid", "🧾", false),
+        "invoice.payment_failed" => ("Invoice Payment Failed", "⚠️", true),
+        "invoice.past_due" => ("Invoice Past Due", "⚠️", false),
+        "abandoned_checkout.detected" => ("Checkout Abandoned", "🛒", false),
+        "abandoned_checkout.recovered" => ("Checkout Recovered", "🛒", true),
+        "dunning.started" => ("Dunning Started", "📨", false),
+        "dunning.recovered" => ("Payment Recovered", "💪", true),
+        "license_key.created" => ("License Key Created", "🔑", false),
+        "payout.success" => ("Payout Sent", "🏦", true),
+        "payout.failed" => ("Payout Failed", "⚠️", true),
+        other => return (title_case(other), "💳", false),
+    };
+    (name.to_string(), icon, notify)
+}
+
 fn map_dodo(event_type: &str, body: &Value) -> Mapped {
+    let event_type = if event_type.is_empty() { at(body, &["type"]).unwrap_or("") } else { event_type };
     let data = body.get("data").unwrap_or(&Value::Null);
     let email = at(data, &["customer", "email"]);
     let customer_id = at(data, &["customer", "customer_id"]).or_else(|| at(data, &["customer_id"]));
     let user_id = email.or(customer_id).unwrap_or_default().to_string();
-    let amount = minor_units(
-        data.get("total_amount")
-            .or_else(|| data.get("amount"))
-            .and_then(Value::as_i64),
-    );
+    let amount = dodo_amount(data);
     let currency = at(data, &["currency"]).unwrap_or_default().to_uppercase();
 
     let mut tags = BTreeMap::new();
     tag(&mut tags, "amount", amount.as_deref());
     tag(&mut tags, "currency", Some(currency.as_str()).filter(|c| !c.is_empty()));
     tag(&mut tags, "customer", email.or(customer_id));
+    tag(&mut tags, "product", at(data, &["product_id"]));
+    tag(&mut tags, "subscription", at(data, &["subscription_id"]));
+    tag(&mut tags, "payment", at(data, &["payment_id"]));
+    tag(&mut tags, "status", at(data, &["status"]));
+    tag(&mut tags, "dodo_event", Some(event_type));
 
-    let (event, icon, notify) = match event_type {
-        "payment.succeeded" => ("Payment Succeeded", "💰", true),
-        "payment.failed" => ("Payment Failed", "⚠️", true),
-        "subscription.active" => ("New Subscription", "💰", true),
-        "subscription.cancelled" => ("Subscription Cancelled", "⚠️", true),
-        other => (other, "🦤", false),
-    };
+    let (event, icon, notify) = dodo_event(event_type);
+    let channel = if event_type.starts_with("payout.") { "payouts" } else { "payments" };
 
     let mut parts: Vec<String> = Vec::new();
-    if let Some(e) = email.or(customer_id) {
+    if let Some(e) = at(data, &["customer", "name"]).or(email).or(customer_id) {
         parts.push(e.to_string());
     }
     if let Some(a) = &amount {
         parts.push(format!("{a} {currency}").trim().to_string());
     }
-    mapped("payments", event, parts.join(" · "), icon, notify, tags, user_id)
+    if let Some(r) = at(data, &["reason"]).or_else(|| at(data, &["error_message"])) {
+        parts.push(r.to_string());
+    }
+    mapped(channel, &event, parts.join(" · "), icon, notify, tags, user_id)
 }
 
 // ───────────────────────── generic ─────────────────────────
@@ -624,6 +681,34 @@ mod tests {
         assert!(m.notify);
         assert_eq!(m.user_id, "j@a.co");
         assert_eq!(m.tags.get("amount").unwrap(), "29.00");
+    }
+
+    #[test]
+    fn dodo_lifecycle_events() {
+        let sub = json!({"type": "subscription.active", "data": {"recurring_pre_tax_amount": 1200,
+            "currency": "USD", "subscription_id": "sub_1", "product_id": "pdt_1",
+            "customer": {"email": "j@a.co", "customer_id": "cus_1", "name": "Jane"}}});
+        let m = map_event("dodo", "subscription.active", &sub);
+        assert_eq!(m.event, "New Subscription");
+        assert!(m.notify);
+        assert_eq!(m.tags.get("amount").unwrap(), "12.00");
+        assert_eq!(m.tags.get("subscription").unwrap(), "sub_1");
+
+        let dispute = json!({"data": {"amount": "4500", "currency": "usd", "customer": {"email": "j@a.co"}}});
+        let m = map_event("dodo", "dispute.opened", &dispute);
+        assert_eq!(m.event, "Dispute Opened");
+        assert!(m.notify);
+        assert_eq!(m.tags.get("amount").unwrap(), "45.00");
+
+        let m = map_event("dodo", "refund.succeeded", &json!({"data": {"amount": 500}}));
+        assert_eq!(m.event, "Refund Issued");
+
+        let m = map_event("dodo", "payout.success", &json!({"data": {}}));
+        assert_eq!(m.channel, "payouts");
+
+        let m = map_event("dodo", "credit.balance_low", &json!({"data": {}}));
+        assert_eq!(m.event, "Credit Balance Low");
+        assert!(!m.notify);
     }
 
     #[test]

@@ -40,7 +40,7 @@ Turn third-party webhooks into events with no code — the project token lives i
 POST /v1/webhooks/{source}/{token}
 ```
 
-Sources: `stripe` → `payments` (checkouts, subscriptions, invoices, refunds — amount/currency/customer in tags, notify on money events) · `github` → `github` (push, pull_request, release, issues, star) · `vercel` → `deploys` (deployment created/succeeded/error) · `dodo` → `payments` (payment.succeeded/failed, subscription.active/cancelled) · `generic` → `webhooks` (JSON body with optional `event`, `description`, `channel`, `icon`, `tags`, `user_id`). Unknown event types are still logged, never rejected.
+Sources: `dodo` → `payments` (all payment, refund, dispute, subscription, invoice, dunning and abandoned-checkout events; payouts → `payouts`; money-moving and churn events notify) · `stripe` → `payments` (checkouts, subscriptions, invoices, refunds — amount/currency/customer in tags, notify on money events) · `github` → `github` (push, pull_request, release, issues, star) · `vercel` → `deploys` (deployment created/succeeded/error) · `generic` → `webhooks` (JSON body with optional `event`, `description`, `channel`, `icon`, `tags`, `user_id`). Unknown event types are still logged, never rejected.
 
 Signature verification is optional per project: set a secret in **Settings → Integrations** (stored per source in Postgres) and Stripe-Signature, X-Hub-Signature-256, x-vercel-signature, or Standard Webhooks signatures are enforced. With no secret, deliveries are accepted.
 
