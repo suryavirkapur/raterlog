@@ -1,10 +1,12 @@
-use scylla::Session;
-use std::sync::Arc;
+use crate::billing::{Dodo, QuotaCache};
+use crate::ch::ClickHouse;
 use tokio_postgres::Client;
 
 pub struct AppState {
-    pub db: Arc<Session>,
     pub client: Client,
+    pub ch: ClickHouse,
+    pub quota: QuotaCache,
+    pub dodo: Option<Dodo>,
     pub cookie_secure: bool,
     pub app_url: String,
     pub smtp_host: String,

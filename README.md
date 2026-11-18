@@ -1,54 +1,76 @@
 # Raterlog
 
-Raterlog is a LogSnag-style event monitoring platform: ingest product events, identify users, publish live insights, and ask an AI copilot what just happened.
-
-The Go rewrite lives at [suryavirkapur/raterlog-go](https://github.com/suryavirkapur/raterlog-go). This repository is the original Rust + Next.js stack, now with **all HTTP APIs owned by the Rust backend**.
+Real-time event tracking for products: send an event with one HTTP request and get a live feed, push notifications, charts, funnels, user journeys and KPI insights. LogSnag-compatible API.
 
 ## Architecture
 
-- **Rust API (`api/`)** — authentication, sessions, companies, members, invites, channels, API tokens, LogSnag-compatible ingest (`/v1/log`, `/v1/identify`, `/v1/insight`), Cassandra event storage, and AI summarize/query.
-- **Next.js UI (`web/`)** — dashboard and marketing site. It talks to the API over JSON; it does not own Prisma mutations or Next.js route handlers for product data.
-- **Postgres** — users, sessions, companies, membership, channels, tokens, invites, insights, identified users. The API applies this schema on boot.
-- **Cassandra/Scylla** — append-only event logs.
-- **Kong** — optional gateway in front of the API.
+One Rust binary serves everything:
 
-## API surface
+- **API** (`api/`, actix-web): auth, projects, channels, tokens, invites, ingest, analytics, billing.
+- **Web app** (`web/`, Rsbuild + React + Blueprint): built to `web/dist` and **embedded into the binary** with `rust-embed`, so the UI and the API share one origin.
+- **Postgres**: users, sessions, projects, members, tokens, insights, identified users, plan.
+- **ClickHouse**: events (columnar, compressed, `windowFunnel` for funnels, per-plan retention).
+- **Dodo Payments**: hosted checkout, customer portal, webhooks → `Company.plan`.
 
-Session cookie `raterlog_session` (or `X-Session-Token`) for the dashboard. Ingest uses `Authorization: Bearer <token>` or `Basic <token>`.
+## Ingest API (LogSnag-compatible)
 
-Auth: `POST /api/auth/signup`, `POST /api/auth/signin`, `POST /api/auth/signout`, `GET /api/auth/me`
+`Authorization: Bearer <token>` (create a token in Settings → Tokens).
 
-Companies: `GET|POST /api/companies`, `GET|PATCH /api/companies/{id}`, channels, members, invites, tokens
+```sh
+curl -X POST https://raterlog.com/v1/log \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"project":"my-saas","channel":"payments","event":"New Subscription","icon":"💰","notify":true,"tags":{"plan":"pro"},"user_id":"user_123"}'
+```
 
-Invites: `GET /api/invites/{token}`, `POST /api/invites/{token}/accept`
+- `POST /v1/log` — event (`project`, `channel`, `event`, `description`, `icon`, `notify`, `tags`, `user_id`, `timestamp`)
+- `POST /v1/identify` — user properties (`project`, `user_id`, `properties`)
+- `POST /v1/insight`, `PATCH /v1/insight` (`value: {"$inc": 1}`) — KPI tiles
 
-Logs: `POST /api/logs`, `GET /api/logs/{channelId}` (aliases `POST /log`, `GET /log/{channelId}`)
+`project` is the project name (or id). Channels are created on first use.
+Legacy: `POST /api/logs` / `POST /log` with `channel_id`, `event_name`, `event_payload`, `metadata`.
 
-LogSnag-compatible: `POST /v1/log`, `POST /v1/identify`, `POST|PATCH /v1/insight`
+## Dashboard API (session cookie)
 
-AI: `POST /api/channels/{channelId}/ai/summarize`, `POST /api/channels/{channelId}/ai/query`
+Auth `/api/auth/*`; projects `/api/companies[/{id}]` with channels, tokens, invites;
+feed `GET /api/companies/{id}/events?channel&event&user_id&tag=k:v&q&before&since&limit`;
+analytics `/api/companies/{id}/analytics/{timeseries,breakdown,funnel}`;
+journeys `GET /api/companies/{id}/users/{userId}`; usage `GET /api/companies/{id}/usage`;
+billing `GET /api/plans`, `POST /api/companies/{id}/billing/{checkout,portal}`, `POST /api/billing/webhook`;
+AI `POST /api/channels/{id}/ai/{summarize,query}`. Health: `GET /health`.
+
+The typed client in `web/src/lib/api.ts` is the contract.
 
 ## Run locally
 
-Postgres on `5432`, Cassandra on `9042`, Mailhog on `1025`.
-
 ```sh
-cd api
-# optional: DATABASE_URL, CASSANDRA_URI, CORS_ORIGINS, APP_URL, SMTP_HOST, SMTP_PORT, OPENAI_API_KEY
-cargo run
+docker compose up --build          # app on http://localhost:8080
 ```
 
+Or for development with hot reload:
+
 ```sh
-cd web
-echo 'NEXT_PUBLIC_API_URL=http://localhost:8080' > .env
-bun install   # or npm install
-bun run dev
+docker compose up -d postgres clickhouse
+cd api && cp .env.example .env && cargo run      # :8080
+cd web && npm install && npm run dev             # :3000, proxies /api and /v1 to :8080
 ```
 
-The API creates Postgres tables on startup. Open `http://localhost:3000`.
+## Configuration
 
-Docker Compose starts Cassandra, Postgres, Mailhog, Kong, the API, and the web UI. Set `NEXT_PUBLIC_API_URL` at image build time to the browser-reachable API (default `http://localhost:8080`).
+See `api/.env.example`. Required: `DATABASE_URL`, `CLICKHOUSE_URL`, `APP_URL`.
+Optional: `SMTP_HOST`/`SMTP_PORT` (invite emails; invites can also be shared as links), `OPENAI_API_KEY` (AI copilot), `DODO_*` (billing; endpoints return 503 when unset).
 
-## AI
+`www.` hosts are redirected (301) to the apex domain by the server.
 
-Summaries and Q&A always work with local heuristics. Set `OPENAI_API_KEY` on the API to upgrade those answers with `gpt-4o-mini`.
+## Plans
+
+| Plan | Monthly | Yearly | Events / month | Seats | History |
+|---|---|---|---|---|---|
+| Free | $0 | $0 | 3,000 | 3 | 30 days |
+| Starter | $12 | $120 | 50,000 | Unlimited | 1 year |
+| Growth | $29 | $290 | 250,000 | Unlimited | 2 years |
+| Scale | $59 | $590 | 1,000,000 | Unlimited | 3 years |
+
+Free projects stop ingesting at the limit (HTTP 402); paid projects never drop events.
+Defined in `api/src/billing.rs` and mirrored in `web/src/lib/plans.ts`.
+
+The Go rewrite lives at [suryavirkapur/raterlog-go](https://github.com/suryavirkapur/raterlog-go).

@@ -4,6 +4,8 @@ use crate::util::{api_token_from_request, error_json, session_id_from_request};
 use actix_web::{http::StatusCode, web::Data, HttpRequest, HttpResponse};
 
 pub mod ai;
+pub mod analytics;
+pub mod billing;
 pub mod auth;
 pub mod companies;
 pub mod identify;

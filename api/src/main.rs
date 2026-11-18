@@ -1,16 +1,22 @@
 use actix_cors::Cors;
-use actix_web::{http::header, web::Data, App, HttpServer};
-use db::connect_with_retry;
-use std::{env, sync::Arc, time::Duration};
+use actix_web::{
+    http::header,
+    middleware::{from_fn, Compress, DefaultHeaders},
+    web::{self, Data},
+    App, HttpServer,
+};
+use std::env;
 use tokio_postgres::NoTls;
 
 mod ai;
-mod db;
+mod billing;
+mod ch;
 mod mail;
 mod pg;
 mod routes;
 mod state;
 mod util;
+mod spa;
 
 use state::AppState;
 
@@ -21,9 +27,8 @@ async fn main() -> std::io::Result<()> {
 
     let postgres_uri = env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/example".into());
-    let cassandra_uri = env::var("CASSANDRA_URI").unwrap_or_else(|_| "localhost:9042".into());
-    let cors_origins = env::var("CORS_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:3000,http://127.0.0.1:3000".into());
+    let clickhouse_url = env::var("CLICKHOUSE_URL").unwrap_or_else(|_| "http://localhost:8123".into());
+    let clickhouse_db = env::var("CLICKHOUSE_DB").unwrap_or_else(|_| "raterlog".into());
     let cookie_secure = env::var("COOKIE_SECURE")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -43,21 +48,39 @@ async fn main() -> std::io::Result<()> {
         if let Err(e) = connection.await {
             eprintln!("postgres connection error: {e}");
         }
+        // The API holds a single connection; if it drops, exit so the
+        // orchestrator restarts us with a fresh one instead of serving 500s.
+        eprintln!("postgres connection closed, exiting");
+        std::process::exit(1);
     });
     println!("Successfully connected to Postgres!");
     pg::ensure_schema(&client)
         .await
         .expect("failed to apply postgres schema");
 
-    let session = connect_with_retry(&cassandra_uri, 5, Duration::from_secs(10))
-        .await
-        .expect("failed to connect to cassandra");
-    db::start_db(&session).await;
-    println!("Successfully connected to Cassandra!");
+    let ch = ch::ClickHouse::new(&clickhouse_url, &clickhouse_db).expect("invalid CLICKHOUSE_URL");
+    let mut attempt = 0;
+    loop {
+        match ch.ensure_schema().await {
+            Ok(()) => break,
+            Err(e) if attempt < 30 => {
+                attempt += 1;
+                eprintln!("clickhouse not ready ({e}); retrying in 2s");
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            Err(e) => panic!("failed to apply clickhouse schema: {e}"),
+        }
+    }
+    println!("ClickHouse ready");
+
+    let dodo = billing::Dodo::from_env();
+    println!("Billing: {}", if dodo.is_some() { "Dodo Payments enabled" } else { "disabled (DODO_API_KEY not set)" });
 
     let data = Data::new(AppState {
-        db: Arc::new(session),
         client,
+        ch,
+        quota: billing::QuotaCache::default(),
+        dodo,
         cookie_secure,
         app_url,
         smtp_host,
@@ -65,29 +88,24 @@ async fn main() -> std::io::Result<()> {
         openai_api_key,
     });
 
+    spawn_retention_job(data.clone());
+
     HttpServer::new(move || {
-        let mut cors = Cors::default()
+        // Same-origin dashboard needs no CORS; this is for browser-side
+        // ingestion from customers' sites (token auth, no cookies).
+        let cors = Cors::default()
+            .allow_any_origin()
             .allowed_methods(vec!["GET", "POST", "PATCH", "DELETE", "OPTIONS"])
-            .allowed_headers(vec![
-                header::AUTHORIZATION,
-                header::ACCEPT,
-                header::CONTENT_TYPE,
-                header::COOKIE,
-                header::HeaderName::from_static("x-session-token"),
-            ])
-            .supports_credentials()
+            .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE])
             .max_age(3600);
-        for origin in cors_origins.split(',') {
-            let origin = origin.trim();
-            if !origin.is_empty() {
-                cors = cors.allowed_origin(origin);
-            }
-        }
 
         App::new()
             .wrap(cors)
+            .wrap(Compress::default())
+            .wrap(DefaultHeaders::new().add(("X-Content-Type-Options", "nosniff")))
+            .wrap(from_fn(spa::www_redirect))
             .app_data(data.clone())
-            .service(routes::log::hello)
+            .app_data(web::JsonConfig::default().limit(256 * 1024))
             .service(routes::log::health)
             .service(routes::log::create_log)
             .service(routes::log::create_log_compat)
@@ -95,6 +113,8 @@ async fn main() -> std::io::Result<()> {
             .service(routes::log::get_logs_compat)
             .service(routes::log::create_logsnag_log)
             .service(routes::log::channel_detail)
+            .service(routes::log::delete_channel)
+            .service(routes::log::company_events)
             .service(routes::auth::signup)
             .service(routes::auth::signin)
             .service(routes::auth::signout)
@@ -116,10 +136,41 @@ async fn main() -> std::io::Result<()> {
             .service(routes::insights::list_insights)
             .service(routes::identify::identify)
             .service(routes::identify::list_identified_users)
+            .service(routes::analytics::timeseries)
+            .service(routes::analytics::breakdown)
+            .service(routes::analytics::funnel)
+            .service(routes::analytics::user_journey)
+            .service(routes::analytics::usage)
+            .service(routes::billing::plans)
+            .service(routes::billing::checkout)
+            .service(routes::billing::portal)
+            .service(routes::billing::webhook)
             .service(routes::ai::summarize)
             .service(routes::ai::query)
+            .default_service(web::to(spa::spa))
     })
     .bind(bind)?
     .run()
     .await
+}
+
+/// Daily: delete events older than each project's plan retention.
+fn spawn_retention_job(state: Data<AppState>) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
+            match pg::all_company_plans(&state.client).await {
+                Ok(list) => {
+                    for (company_id, plan) in list {
+                        let days = billing::plan(&plan).retention_days;
+                        if let Err(e) = state.ch.purge_older_than(&company_id, days).await {
+                            tracing::warn!("retention purge failed for {company_id}: {e}");
+                        }
+                    }
+                }
+                Err(e) => tracing::warn!("retention job: {e}"),
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(18 * 3600)).await;
+        }
+    });
 }

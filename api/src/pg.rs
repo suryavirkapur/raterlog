@@ -159,6 +159,11 @@ pub async fn ensure_schema(client: &Client) -> Result<(), tokio_postgres::Error>
                 "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 UNIQUE ("companyID", "userId")
             );
+            ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+            ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "billingCustomerId" TEXT;
+            ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "subscriptionId" TEXT;
+            CREATE INDEX IF NOT EXISTS session_user_idx ON "Session"("userId");
+            CREATE INDEX IF NOT EXISTS token_token_idx ON "Token"(token);
             "#,
         )
         .await
@@ -305,23 +310,6 @@ pub async fn company_by_id(
         .query_opt(
             r#"SELECT id, name, billing FROM "Company" WHERE id = $1"#,
             &[&id],
-        )
-        .await?;
-    Ok(row.map(|row| Company {
-        id: row.get(0),
-        name: row.get(1),
-        billing: row.get(2),
-    }))
-}
-
-pub async fn company_by_name(
-    client: &Client,
-    name: &str,
-) -> Result<Option<Company>, tokio_postgres::Error> {
-    let row = client
-        .query_opt(
-            r#"SELECT id, name, billing FROM "Company" WHERE lower(name) = lower($1)"#,
-            &[&name],
         )
         .await?;
     Ok(row.map(|row| Company {
@@ -822,4 +810,100 @@ fn identified_from_row(row: &tokio_postgres::Row) -> IdentifiedUser {
         properties: row.get(3),
         updated_at: row.get(4),
     }
+}
+
+pub struct CompanyBilling {
+    pub plan: String,
+    pub customer_id: Option<String>,
+}
+
+pub async fn company_billing(
+    client: &Client,
+    company_id: &str,
+) -> Result<Option<CompanyBilling>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            r#"SELECT plan, "billingCustomerId" FROM "Company" WHERE id = $1"#,
+            &[&company_id],
+        )
+        .await?;
+    Ok(row.map(|r| CompanyBilling {
+        plan: r.get(0),
+        customer_id: r.get(1),
+    }))
+}
+
+pub async fn set_company_plan(
+    client: &Client,
+    company_id: &str,
+    plan: &str,
+    customer_id: Option<&str>,
+    subscription_id: Option<&str>,
+) -> Result<u64, tokio_postgres::Error> {
+    client
+        .execute(
+            r#"UPDATE "Company" SET plan = $2, billing = ($2 <> 'free'),
+                 "billingCustomerId" = COALESCE($3, "billingCustomerId"),
+                 "subscriptionId" = COALESCE($4, "subscriptionId")
+               WHERE id = $1"#,
+            &[&company_id, &plan, &customer_id, &subscription_id],
+        )
+        .await
+}
+
+/// Downgrade whichever company owns this subscription.
+pub async fn downgrade_subscription(
+    client: &Client,
+    subscription_id: &str,
+) -> Result<u64, tokio_postgres::Error> {
+    client
+        .execute(
+            r#"UPDATE "Company" SET plan = 'free', billing = false WHERE "subscriptionId" = $1"#,
+            &[&subscription_id],
+        )
+        .await
+}
+
+pub async fn all_company_plans(client: &Client) -> Result<Vec<(String, String)>, tokio_postgres::Error> {
+    let rows = client.query(r#"SELECT id, plan FROM "Company""#, &[]).await?;
+    Ok(rows.iter().map(|r| (r.get(0), r.get(1))).collect())
+}
+
+pub async fn delete_channel(
+    client: &Client,
+    company_id: &str,
+    channel_id: &str,
+) -> Result<u64, tokio_postgres::Error> {
+    client
+        .execute(
+            r#"DELETE FROM "Channel" WHERE id = $1 AND "companyID" = $2"#,
+            &[&channel_id, &company_id],
+        )
+        .await
+}
+
+pub async fn identified_user(
+    client: &Client,
+    company_id: &str,
+    user_id: &str,
+) -> Result<Option<IdentifiedUser>, tokio_postgres::Error> {
+    let row = client
+        .query_opt(
+            r#"SELECT id, "companyID", "userId", properties, "updatedAt"
+               FROM "IdentifiedUser" WHERE "companyID" = $1 AND "userId" = $2"#,
+            &[&company_id, &user_id],
+        )
+        .await?;
+    Ok(row.as_ref().map(identified_from_row))
+}
+
+pub async fn seat_count(client: &Client, company_id: &str) -> Result<i64, tokio_postgres::Error> {
+    let row = client
+        .query_one(
+            r#"SELECT (SELECT COUNT(*) FROM "CompanyUser" WHERE "companyID" = $1)
+                    + (SELECT COUNT(*) FROM "Invite" WHERE "companyID" = $1 AND status = 'pending')"#,
+            &[&company_id],
+        )
+        .await?;
+    Ok(row.get(0))
 }

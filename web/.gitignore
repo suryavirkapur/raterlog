@@ -1,10 +1,5 @@
 node_modules
-.output
-.nitro
-.tanstack
 dist
-.vite
 *.tsbuildinfo
-src/routeTree.gen.ts
 .DS_Store
 .env*.local

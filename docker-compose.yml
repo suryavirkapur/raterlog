@@ -1,21 +1,34 @@
-# Everything boots from the single top-level Dockerfile: one image runs
-# PostgreSQL, Cassandra, MailHog, the Rust API and the Next.js web app.
+# Local stack: app (API + embedded web) + Postgres + ClickHouse.
 services:
-  raterlog:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: raterlog
-    container_name: raterlog
-    ports:
-      - "3000:3000" # web dashboard
-      - "8080:8080" # Rust API
-      - "8025:8025" # MailHog UI
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - cassandra-data:/var/lib/cassandra
+  app:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/raterlog
+      CLICKHOUSE_URL: http://raterlog:raterlog@clickhouse:8123
+      APP_URL: http://localhost:8080
+      COOKIE_SECURE: "false"
+    depends_on: [postgres, clickhouse]
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: raterlog
+    volumes: [pgdata:/var/lib/postgresql/data]
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8
+    environment:
+      CLICKHOUSE_USER: raterlog
+      CLICKHOUSE_PASSWORD: raterlog
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ulimits: { nofile: { soft: 262144, hard: 262144 } }
+    volumes: [chdata:/var/lib/clickhouse]
     restart: unless-stopped
 
 volumes:
   pgdata:
-  cassandra-data:
+  chdata:

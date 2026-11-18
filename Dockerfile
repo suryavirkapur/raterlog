@@ -1,67 +1,27 @@
 # syntax=docker/dockerfile:1
-#
-# All-in-one Raterlog image: builds the Rust API and the TanStack web client,
-# then runs PostgreSQL, Cassandra, MailHog, the Rust API and the web server
-# together from a single container (see docker/entrypoint.sh).
+# One image: the Rust API with the React SPA embedded in the binary.
+# Postgres and ClickHouse run as separate services (see docker-compose.yml).
 
-########################  Stage 1 — build the Rust API  ########################
-FROM rust:1-bookworm AS api-builder
-WORKDIR /build
-COPY api/Cargo.toml api/Cargo.lock ./
-COPY api/src ./src
-RUN cargo build --release && cp target/release/raterlog /raterlog
-
-########################  Stage 2 — build the web app  ########################
-FROM node:22-bookworm AS web-builder
-WORKDIR /build
+FROM node:22-bookworm-slim AS web
+WORKDIR /web
 COPY web/package.json web/package-lock.json ./
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 COPY web/ ./
-ARG VITE_API_URL=http://localhost:8080
-ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
-########################  Stage 3 — runtime  ########################
-FROM debian:bookworm-slim AS runtime
-ENV DEBIAN_FRONTEND=noninteractive
+FROM rust:1-bookworm AS api
+WORKDIR /build/api
+COPY api/Cargo.toml api/Cargo.lock ./
+COPY api/src ./src
+COPY --from=web /web/dist /build/web/dist
+RUN cargo build --release && cp target/release/raterlog /raterlog
 
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-      ca-certificates curl gnupg gosu procps \
-      postgresql postgresql-contrib \
-      openjdk-17-jre-headless; \
-    curl -fsSL https://downloads.apache.org/cassandra/KEYS \
-      | gpg --dearmor -o /etc/apt/trusted.gpg.d/cassandra.gpg; \
-    echo "deb [signed-by=/etc/apt/trusted.gpg.d/cassandra.gpg] https://debian.cassandra.apache.org 50x main" \
-      > /etc/apt/sources.list.d/cassandra.list; \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends cassandra nodejs; \
-    curl -fsSL -o /usr/local/bin/mailhog \
-      https://github.com/mailhog/MailHog/releases/download/v1.0.1/MailHog_linux_amd64; \
-    chmod +x /usr/local/bin/mailhog; \
-    rm -rf /var/lib/apt/lists/*
-
-# App artifacts.
-COPY --from=api-builder /raterlog /usr/local/bin/raterlog
-COPY --from=web-builder /build/.output /app/web/.output
-COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
-ENV DATABASE_URL="postgres://postgres:postgres@localhost:5432/example" \
-    CASSANDRA_URI="localhost:9042" \
-    CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000" \
-    APP_URL="http://localhost:3000" \
-    SMTP_HOST="localhost" \
-    SMTP_PORT="1025" \
-    COOKIE_SECURE="false" \
-    HTTP_ADDR="0.0.0.0:8080" \
-    VITE_API_URL="http://localhost:8080" \
-    PORT="3000" \
-    HOST="0.0.0.0"
-
-# web (3000), api (8080), MailHog UI (8025)
-EXPOSE 3000 8080 8025
-
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/* && useradd -r -u 10001 raterlog
+COPY --from=api /raterlog /usr/local/bin/raterlog
+USER raterlog
+ENV HTTP_ADDR=0.0.0.0:8080 COOKIE_SECURE=true RUST_LOG=info
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+CMD ["raterlog"]

@@ -1,9 +1,6 @@
 .git
 **/node_modules
-**/.next
-**/dist
+web/dist
 api/target
 **/.DS_Store
-recordings
 *.log
-web/.env*.local

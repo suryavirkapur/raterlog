@@ -1,0 +1,56 @@
+/* Auth pages: centered card over the app background. */
+.rl-auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+.rl-auth-box {
+  width: 100%;
+  max-width: 400px;
+}
+.rl-auth-card {
+  padding: 28px;
+}
+.rl-auth-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 600;
+  font-size: 15px;
+  text-decoration: none !important;
+  color: inherit !important;
+  margin-bottom: 20px;
+}
+.rl-auth-brand img {
+  border-radius: 7px;
+  display: block;
+}
+.rl-auth-title {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+.rl-auth-sub {
+  font-size: 13.5px;
+  margin: 0 0 20px;
+  opacity: 0.75;
+}
+.rl-auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rl-auth-footer {
+  text-align: center;
+  font-size: 13.5px;
+  margin-top: 16px;
+  opacity: 0.8;
+}
+.rl-auth-alt {
+  text-align: center;
+  font-size: 13px;
+  margin-top: 14px;
+  opacity: 0.8;
+}

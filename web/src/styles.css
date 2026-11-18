@@ -1,0 +1,10 @@
+/* Global styles. Keep this file small: prefer Blueprint components and Classes.
+   Page/area specific CSS lives next to the component (e.g. Landing.css). */
+:root {
+  --rl-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --rl-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+html, body, #root { height: 100%; margin: 0; }
+body { font-family: var(--rl-font); background: #f6f7f9; }
+body.bp6-dark { background: #111418; }
+code, pre, .rl-mono { font-family: var(--rl-mono); }
