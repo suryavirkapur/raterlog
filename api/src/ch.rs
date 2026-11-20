@@ -372,16 +372,18 @@ impl ClickHouse {
             params.push(("q".into(), v.clone()));
         }
         if let Some(v) = f.before {
-            wh.push("id < {before:UInt64}".into());
+            // events.id, not the toString() select alias: ClickHouse's analyzer
+            // resolves bare `id` to the String alias and String vs UInt64 fails.
+            wh.push("events.id < {before:UInt64}".into());
             params.push(("before".into(), v.to_string()));
         }
         if let Some(v) = f.since {
-            wh.push("id > {since:UInt64}".into());
+            wh.push("events.id > {since:UInt64}".into());
             params.push(("since".into(), v.to_string()));
         }
         params.push(("lim".into(), f.limit.clamp(1, 500).to_string()));
         let sql = format!(
-            "SELECT {} FROM events WHERE {} ORDER BY id DESC LIMIT {{lim:UInt32}}",
+            "SELECT {} FROM events WHERE {} ORDER BY events.id DESC LIMIT {{lim:UInt32}}",
             Self::EVENT_COLS,
             wh.join(" AND ")
         );
