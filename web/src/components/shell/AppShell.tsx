@@ -7,6 +7,8 @@ import {
 } from "@tanstack/react-router";
 import {
   Button,
+  Classes,
+  Dialog,
   Drawer,
   Icon,
   Menu,
@@ -36,6 +38,61 @@ const PAGE_LABELS: Record<string, string> = {
   settings: "Settings",
 };
 
+function ShortcutRow({
+  keys,
+  description,
+  sequence,
+}: {
+  keys: string[];
+  description: string;
+  sequence?: boolean;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 0" }}>
+      <span style={{ color: "var(--pt-text-color-muted, #5c7080)", fontSize: 13 }}>{description}</span>
+      <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {keys.map((k, i) => (
+          <span key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {i > 0 && (
+              <span style={{ color: "var(--pt-text-color-disabled, #aaa)", fontSize: 11 }}>
+                {sequence ? "then" : "/"}
+              </span>
+            )}
+            <kbd
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "1px 6px",
+                borderRadius: 4,
+                border: "1px solid var(--pt-divider-black, rgba(17,20,24,0.15))",
+                background: "var(--pt-elevation-shadow-0, rgba(17,20,24,0.04))",
+                fontFamily: "inherit",
+                fontSize: 12,
+                fontWeight: 500,
+                minWidth: 22,
+              }}
+            >
+              {k}
+            </kbd>
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function ShortcutSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--pt-text-color-disabled, #aaa)" }}>
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 export default function AppShell({ children }: { children: ReactNode }) {
   const user = useSession();
   const navigate = useNavigate();
@@ -53,6 +110,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [omniOpen, setOmniOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   const projectsReq = useAsync(() => projects.list().catch(() => []), []);
   const detailReq = useAsync(
@@ -92,6 +150,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
       if (e.key === "/") {
         e.preventDefault();
         setOmniOpen(true);
+        return;
+      }
+      if (e.key === "?") {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
         return;
       }
       const now = Date.now();
@@ -371,6 +434,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
                   onClick={() => navigate({ to: "/docs" })}
                 />
                 <MenuItem
+                  icon="key"
+                  text="Keyboard shortcuts"
+                  label="?"
+                  onClick={() => setShortcutsOpen(true)}
+                />
+                <MenuItem
                   icon="contrast"
                   text={theme === "dark" ? "Light theme" : "Dark theme"}
                   onClick={toggleTheme}
@@ -388,6 +457,28 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <CommandPalette isOpen={omniOpen} onClose={() => setOmniOpen(false)} items={paletteItems} />
+      <Dialog
+        isOpen={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        title="Keyboard shortcuts"
+        icon="key"
+        style={{ width: 420 }}
+      >
+        <div className={Classes.DIALOG_BODY}>
+          <ShortcutSection title="Navigation">
+            <ShortcutRow keys={["⌘K", "Ctrl+K"]} description="Open command palette" />
+            <ShortcutRow keys={["/"]} description="Open command palette" />
+            <ShortcutRow keys={["g", "f"]} description="Go to Feed" sequence />
+            <ShortcutRow keys={["g", "a"]} description="Go to Analytics" sequence />
+            <ShortcutRow keys={["g", "d"]} description="Go to Dashboards" sequence />
+            <ShortcutRow keys={["g", "u"]} description="Go to Users" sequence />
+            <ShortcutRow keys={["g", "s"]} description="Go to Settings" sequence />
+          </ShortcutSection>
+          <ShortcutSection title="General">
+            <ShortcutRow keys={["?"]} description="Show keyboard shortcuts" />
+          </ShortcutSection>
+        </div>
+      </Dialog>
       <NewProjectDialog
         isOpen={newProjectOpen}
         onClose={() => setNewProjectOpen(false)}
